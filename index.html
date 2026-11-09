@@ -78,7 +78,7 @@ td input{width:100%;padding:4px;font-size:14px}
 <div class="mt">CSV読み込み</div>
 <div id="ifile" class="note" style="margin:4px 0 8px"></div>
 <div id="itypes" class="ctypes"></div>
-<div class="note" style="margin-top:8px">今の記録に追加します。同じ動画・同じ種類・ほぼ同じ時刻（1秒未満の差）の記録は重複として取り込みません。</div>
+<div class="note" style="margin-top:8px">今の記録に追加します。同じ記録、ほかの人が記録した同じサーブ（6秒以内）・セット切替（5分以内）は重複として取り込みません。注目スパイク・見返したいはメモが違えば別の記録として追加します。重複した記録のメモは今のメモにつなげます。</div>
 <div class="row" style="margin:10px 0 0"><button onclick="closeImp()" style="flex:1">キャンセル</button><button id="igo" onclick="doImp()" style="flex:1;background:#2a5;font-weight:bold"></button></div>
 </div></div>
 <div id="mcopy" class="modal"><div class="mbox">
@@ -321,10 +321,12 @@ function snap(){
   const t=+Math.max(0,P.getCurrentTime()-leadSec()).toFixed(2);let pi=-1,title='';
   try{title=P.getVideoData().title||'';if(cur.list)pi=P.getPlaylistIndex()}catch(e){}
   return{t,v,pi,title,list:cur.list}}
+/* 記録ごとの固有番号。CSVで人に渡しても同じ記録だとわかるようにする */
+function newUid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,8)}
 function rec(type,side=''){const sn=snap();if(sn)addRec(sn,type,side,'')}
 function addRec(sn,type,side,memo){const{t,v,pi,title}=sn;
   addOrder(v,pi);if(title)TT[v]=title;
-  L.push({t,type,side,memo,n:++seq,v,pi:pi>=0?pi:-1,list:sn.list,title});sortL();draw();
+  L.push({t,type,side,memo,n:++seq,uid:newUid(),v,pi:pi>=0?pi:-1,list:sn.list,title});sortL();draw();
   if(type==='セット開始'){const i=L.findIndex(x=>x.n===seq);toast(fmt(t)+' 第'+calc()[i].s+'セット開始')}
   else toast(fmt(t)+' '+type+(side?'（'+tn(side,v)+'）':''));
   if(navigator.vibrate)navigator.vibrate(30);
@@ -449,9 +451,9 @@ function doCopy(){const R=cRecs().filter(x=>x.e.type!=='セット開始');
     ()=>showOut(r.text,'自動でコピーできませんでした。上の「コピー」を押すか、長押しで選択してコピーしてください。'))}
 
 /* ---------- CSV ---------- */
-const COLS=['video_id','video_title','playlist_id','playlist_index','team_a','team_b','set','seconds','time','rally','score_a','score_b','type','serve_side','serve_team','memo'];
+const COLS=['video_id','video_title','playlist_id','playlist_index','team_a','team_b','set','seconds','time','rally','score_a','score_b','type','serve_side','serve_team','memo','record_id'];
 function buildCSV(vs){const q=v=>'"'+String(v).replace(/"/g,'""')+'"';const C=calc();
-  const rows=[COLS].concat(L.map((e,i)=>({e,i})).filter(x=>vs.has(x.e.v)).map(({e,i})=>[e.v,e.title,e.list,e.pi>=0?e.pi+1:'',tn('A',e.v),tn('B',e.v),C[i].s,e.t,fmt(e.t),C[i].r,C[i].a,C[i].b,e.type,e.side,tn(e.side,e.v),e.memo]));
+  const rows=[COLS].concat(L.map((e,i)=>({e,i})).filter(x=>vs.has(x.e.v)).map(({e,i})=>[e.v,e.title,e.list,e.pi>=0?e.pi+1:'',tn('A',e.v),tn('B',e.v),C[i].s,e.t,fmt(e.t),C[i].r,C[i].a,C[i].b,e.type,e.side,tn(e.side,e.v),e.memo,e.uid||'']));
   return rows.map(r=>r.map(q).join(',')).join('\n')}
 /* 書き出す動画を選ぶ。初めは再生中の動画だけ選んだ状態。
    再生中の再生リストの動画を先に、ほかの動画（別の再生リストや単独の動画）をあとに並べる */
@@ -490,12 +492,21 @@ function parseCSV(s){s=s.replace(/^﻿/,'');const rows=[];let r=[],f='',q=false;
     else if(c==='\n'){r.push(f);rows.push(r);r=[];f=''}else if(c!=='\r')f+=c}
   if(f||r.length){r.push(f);rows.push(r)}return rows}
 /* 読み込みは今の記録に追加する。取り込む種類を選べる。
-   同じ動画・種類・サーブ側で時刻の差が1秒未満のものは重複として取り込まない
-   （重複でも、今の記録のメモが空で読み込む側にメモがあれば、メモだけ写す）。
+   複数人が同じ動画を別々に記録したものを合わせることを考えて、重複は次のように決める。
+   - 記録の固有番号が同じ → 同じ記録
+   - サーブ: 同じ動画・同じサーブ側で6秒以内 → 同じサーブ（人によって押すタイミングがずれるため）
+   - セット切替: 同じ動画で5分以内 → 同じ
+   - それ以外（注目スパイク・見返したい）: 1秒未満の差で、メモが同じか片方が空 → 同じ。メモが違えば別の記録として残す
+   重複でも読み込む側にだけあるメモは「今のメモ / 読み込んだメモ」とつなげて残す。
    チーム名は、まだ名前のない動画にだけ入れる */
 let imp=null;
 const TLABEL=t=>t==='セット開始'?'セット切替':t;
-function findDup(e){return L.find(x=>x.v===e.v&&x.type===e.type&&x.side===e.side&&Math.abs(x.t-e.t)<1)}
+function findDup(e){if(e.uid){const u=L.find(x=>x.uid===e.uid);if(u)return u}
+  return L.find(x=>{if(x.v!==e.v||x.type!==e.type)return false;const d=Math.abs(x.t-e.t);
+    if(e.type==='サーブ')return x.side===e.side&&d<6;
+    if(e.type==='セット開始')return d<300;
+    if(d>=1||x.side!==e.side)return false;
+    const a=x.memo.trim(),b=e.memo.trim();return!a||!b||a===b})}
 function importCSV(inp){const file=inp.files[0];if(!file)return;const fr=new FileReader();
   fr.onload=()=>{inp.value='';try{
     const rows=parseCSV(fr.result),h=rows.shift(),ix=k=>h.indexOf(k);
@@ -506,7 +517,7 @@ function importCSV(inp){const file=inp.files[0];if(!file)return;const fr=new Fil
       if(g('team_a'))o.a=g('team_a');if(g('team_b'))o.b=g('team_b');
       if((sd==='a'||sd==='b')&&!o[sd]&&g('serve_team'))o[sd]=g('serve_team');
       const pi=g('playlist_index')?(+g('playlist_index')-1):-1;
-      return{t:+g('seconds')||0,type:g('type'),side:g('serve_side'),memo:g('memo'),v:g('video_id'),pi,list:g('playlist_id'),title:g('video_title')}})
+      return{t:+g('seconds')||0,type:g('type'),side:g('serve_side'),memo:g('memo'),v:g('video_id'),pi,list:g('playlist_id'),title:g('video_title'),uid:g('record_id')}})
       .filter(e=>e.type&&e.v);
     if(!recs.length)throw 0;
     recs.forEach(e=>e.dup=findDup(e));
@@ -521,14 +532,14 @@ function drawImp(){const types=[...new Set(imp.recs.map(e=>e.type))];
   $('itypes').querySelectorAll('input').forEach(inp=>inp.onchange=()=>{const t=types[+inp.dataset.k];inp.checked?imp.on.add(t):imp.on.delete(t);drawImp()});
   const n=imp.recs.filter(e=>imp.on.has(e.type)&&!e.dup).length;
   $('igo').textContent='追加（'+n+'件）';$('igo').disabled=!n&&!memoFills().length;$('igo').style.opacity=$('igo').disabled?.5:1}
-function memoFills(){return imp.recs.filter(e=>imp.on.has(e.type)&&e.dup&&!e.dup.memo.trim()&&e.memo.trim())}
+function memoFills(){return imp.recs.filter(e=>{const m=e.memo.trim();return imp.on.has(e.type)&&e.dup&&m&&!e.dup.memo.includes(m)})}
 function closeImp(){imp=null;$('mimp').classList.remove('on')}
 function doImp(){if(!imp)return;
   const add=imp.recs.filter(e=>imp.on.has(e.type)&&!e.dup),fills=memoFills(),d=inNames();
-  fills.forEach(e=>e.dup.memo=e.memo);
+  fills.forEach(e=>{const a=e.dup.memo.trim(),b=e.memo.trim();e.dup.memo=a?a+' / '+b:b});
   add.forEach(e=>{if(!TN[e.v]){const o=imp.nm[e.v]||{};TN[e.v]={a:o.a||d.a,b:o.b||d.b}}
     addOrder(e.v,e.pi);if(e.title&&!TT[e.v])TT[e.v]=e.title;
-    L.push({t:e.t,type:e.type,side:e.side,memo:e.memo,n:++seq,v:e.v,pi:e.pi,list:e.list,title:e.title})});
+    L.push({t:e.t,type:e.type,side:e.side,memo:e.memo,n:++seq,uid:e.uid||newUid(),v:e.v,pi:e.pi,list:e.list,title:e.title})});
   closeImp();sortL();shownV='';draw();
   const f=add[0];if(f&&!vidNow())openSrc({v:f.v,list:f.list,index:f.pi>=0?f.pi+1:0,t:0},true);
   syncNames();toast(add.length+'件追加しました'+(fills.length?'（メモ '+fills.length+'件）':''))}
@@ -546,7 +557,7 @@ function save(){if(!restored)return;let t=0,v=cur.v,st=-1;
 function restoreData(){let d=null;try{d=JSON.parse(localStorage.getItem(SKEY)||'null')}catch(e){}
   restored=true;if(!d||d.ver!==1)return null;
   L=Array.isArray(d.L)?d.L:[];TN=d.TN||{};order=d.order||{};
-  seq=L.reduce((m,e)=>Math.max(m,e.n||0),0);L.forEach(e=>{if(e.title&&!TT[e.v])TT[e.v]=e.title});
+  seq=L.reduce((m,e)=>Math.max(m,e.n||0),0);L.forEach(e=>{if(!e.uid)e.uid=newUid()});L.forEach(e=>{if(e.title&&!TT[e.v])TT[e.v]=e.title});
   lastSrc=d.src||null;return d.src&&(d.src.v||d.src.list)?d.src:null}
 window.addEventListener('pagehide',save);
 document.addEventListener('visibilitychange',()=>{if(document.hidden)save()});
