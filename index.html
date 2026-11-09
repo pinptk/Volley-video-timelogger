@@ -41,7 +41,6 @@ table{width:100%;border-collapse:collapse;font-size:14px;margin-top:6px}
 td,th{border-bottom:1px solid #333;padding:5px 3px;text-align:left}
 th{white-space:nowrap}
 tbody tr{cursor:pointer}
-tr.grp td{background:#1d2633;color:#9cf;font-size:13px;font-weight:bold;cursor:default}
 .chips{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 0}
 .chips button{padding:6px 12px;font-size:14px;background:#333;border-radius:16px}
 .chips button.on{background:#b8ebc8;color:#0d3b1e;font-weight:bold;box-shadow:0 0 0 2px #4caf6e}
@@ -124,7 +123,7 @@ td input{width:100%;padding:4px;font-size:14px}
 <div class="row" style="justify-content:space-between;align-items:center;margin-top:8px">
 <span id="count" class="note"></span>
 <span><button id="sortbtn" onclick="toggleSort()" style="background:#333;padding:6px 12px"></button>
-<button onclick="if(L.length&&confirm('記録を全部消しますか？')){L=[];order={};draw()}" style="background:#400;padding:6px 12px">全消去</button></span>
+<button onclick="clearVideo()" style="background:#400;padding:6px 12px">この動画を消去</button></span>
 </div>
 <div id="flt" class="chips"></div>
 <table><thead><tr><th>時刻</th><th>セット-R</th><th>点数</th><th>種類</th><th>サーブ</th><th>メモ</th><th></th></tr></thead><tbody id="list"></tbody></table>
@@ -353,8 +352,9 @@ let pendUndo=null;
 function recLabel(e,i){const C=calc();
   if(e.type==='セット開始')return fmt(e.t)+'　第'+C[i].s+'セット開始';
   return fmt(e.t)+'　'+e.type+(e.side?'（'+tn(e.side,e.v)+'）':'')+(e.memo.trim()?'　'+e.memo.trim():'')}
-function askUndo(){if(!L.length){msg('取り消す記録がありません');return}
-  let k=0;L.forEach((e,i)=>{if(e.n>L[k].n)k=i});
+function askUndo(){const vv=viewV();let k=-1;
+  L.forEach((e,i)=>{if(e.v===vv&&(k<0||e.n>L[k].n))k=i});
+  if(k<0){msg('この動画に取り消す記録がありません');return}
   pendUndo={n:L[k].n,resume:holdPlay()};$('undotxt').textContent=recLabel(L[k],k);$('mundo').classList.add('on')}
 function closeUndo(ok){if(!pendUndo)return;const p=pendUndo;pendUndo=null;$('mundo').classList.remove('on');
   if(ok){const k=L.findIndex(e=>e.n===p.n);if(k>=0){const e=L.splice(k,1)[0];draw();toast('取り消し: '+e.type)}}
@@ -372,27 +372,31 @@ function calc(){let s=1,r=0,pv=null,served=false,a=0,b=0;
 let flt='';function setFlt(t){flt=t;draw()}
 let desc=true;try{desc=localStorage.getItem('vt_order')!=='asc'}catch(e){}
 function toggleSort(){desc=!desc;try{localStorage.setItem('vt_order',desc?'desc':'asc')}catch(e){}draw()}
+/* 表に出すのは今の動画の記録だけ（ほかの動画の記録も保存はされている） */
+function viewV(){return vidNow()||cur.v||''}
 function draw(){
   $('la').textContent=$('ta').value;$('lb').textContent=$('tb').value;
-  const C=calc(),multi=cur.list||new Set(L.map(e=>e.v)).size>1;let h='',pv=null;
+  const C=calc(),vv=viewV(),VL=L.filter(e=>e.v===vv);let h='';
   const del=i=>`<button class="del" onclick="event.stopPropagation();L.splice(${i},1);draw()">×</button>`;
-  const last=L.length?Math.max(...L.map(e=>e.n)):-1;
-  const idx=L.map((e,i)=>i);if(desc)idx.reverse();
+  const last=VL.length?Math.max(...VL.map(e=>e.n)):-1;
+  const idx=L.map((e,i)=>i).filter(i=>L[i].v===vv);if(desc)idx.reverse();
   idx.forEach(i=>{const e=L[i],nw=e.n===last?' class="new"':'';
     if(flt&&e.type!=='セット開始'&&e.type!==flt)return;  // 絞り込み中もセットの区切りは残す
-    if(multi&&e.v!==pv){pv=e.v;h+=`<tr class="grp"><td colspan="7">▶ ${e.pi>=0?(e.pi+1)+'本目　':''}${esc(e.title||e.v)}　<span style="color:#ccc">${esc(tn('A',e.v))} vs ${esc(tn('B',e.v))}</span></td></tr>`}
     if(e.type==='セット開始'){h+=`<tr class="set${e.n===last?' new':''}" onclick="seek(${i})"><td>${fmt(e.t)}</td><td colspan="5">第${C[i].s}セット 開始</td><td>${del(i)}</td></tr>`;return}
     h+=`<tr${nw} onclick="seek(${i})"><td>${fmt(e.t)}</td><td>${C[i].s}-${C[i].r}</td><td class="sc">${C[i].a===''?'':C[i].a+'-'+C[i].b}</td><td>${esc(e.type)}</td><td>${esc(tn(e.side,e.v))}</td><td><input value="${esc(e.memo)}" onclick="event.stopPropagation()" oninput="L[${i}].memo=this.value;save()"></td><td>${del(i)}</td></tr>`});
   $('list').innerHTML=h;
-  const cnt={};L.forEach(e=>{if(e.type!=='セット開始')cnt[e.type]=(cnt[e.type]||0)+1});
-  const shown=flt?cnt[flt]||0:L.filter(e=>e.type!=='セット開始').length;
-  $('count').textContent=L.length?(flt?flt+' '+shown+'件 / 全'+L.length+'件':L.length+'件'):'';
+  const cnt={};VL.forEach(e=>{if(e.type!=='セット開始')cnt[e.type]=(cnt[e.type]||0)+1});
+  const all=VL.filter(e=>e.type!=='セット開始').length,shown=flt?cnt[flt]||0:all;
+  $('count').textContent=all?(flt?flt+' '+shown+'件 / この動画 '+all+'件':'この動画 '+all+'件'):'';
   const types=[...new Set(['サーブ','注目スパイク','見返したい',...Object.keys(cnt)])];
   $('flt').innerHTML=[['','すべて']].concat(types.map(t=>[t,t+' '+(cnt[t]||0)])).map(([t,l])=>
     `<button class="${flt===t?'on':''}" data-t="${esc(t)}" onclick="setFlt(this.dataset.t)">${esc(l)}</button>`).join('');
   $('sortbtn').textContent=desc?'新しい順 ▼':'古い順 ▲';
   drawSel();save();
 }
+function clearVideo(){const vv=viewV(),n=L.filter(e=>e.v===vv).length;if(!n){msg('この動画の記録はありません');return}
+  if(!confirm('この動画の記録（'+n+'件）を全部消しますか？\n消す前にCSVで書き出しておけば、あとで読み込んで戻せます。'))return;
+  L=L.filter(e=>e.v!==vv);draw();toast(n+'件消しました')}
 function seek(i){if(!ready)return;const e=L[i],st=e.t;
   if(vidNow()===e.v){P.seekTo(st,true);return}
   if(e.list){let idx=e.pi;
