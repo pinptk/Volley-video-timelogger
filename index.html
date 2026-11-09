@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>バレー動画タグ付け</title>
+<style>
+*{box-sizing:border-box}
+body{font-family:-apple-system,sans-serif;margin:0;padding:10px;background:#111;color:#eee;-webkit-text-size-adjust:100%}
+input,button,textarea{font-size:16px;padding:8px;border-radius:8px;border:none}
+button{color:#fff;background:#555;touch-action:manipulation}
+button:active{filter:brightness(1.4)}
+.row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+#wrap{width:100%;max-width:960px;aspect-ratio:16/9;background:#000;position:relative}
+#player{position:absolute;inset:0;width:100%;height:100%}
+#now{font-size:13px;color:#aaa;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#msg{color:#f99;font-size:13px;min-height:1.2em;margin:4px 0}
+.btns{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:6px 0}
+.btns button{padding:16px 6px;font-weight:bold;font-size:17px}
+.sa{background:#1e6fd9}.sb{background:#d93a1e}.sp{background:#c99200}.rv{background:#8e3ad9}
+.sm{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin:6px 0}
+.sm button{padding:12px 4px}
+#plnav{display:none;grid-template-columns:1fr 1fr;gap:6px;margin:6px 0}
+#plnav button{padding:8px;background:#333}
+#toast{position:fixed;left:50%;top:12px;transform:translateX(-50%);background:#0a0;color:#fff;padding:8px 16px;border-radius:20px;font-weight:bold;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9;white-space:nowrap}
+table{width:100%;border-collapse:collapse;font-size:14px;margin-top:6px}
+td,th{border-bottom:1px solid #333;padding:5px 3px;text-align:left}
+tbody tr{cursor:pointer}
+tr.grp td{background:#1d2633;color:#9cf;font-size:13px;font-weight:bold;cursor:default}
+tr.set td{background:#123d3b;color:#7fe;font-weight:bold}
+.setbtn{width:100%;padding:12px;background:#0b7a75;font-weight:bold;margin:0 0 6px}
+td input{width:100%;padding:4px;font-size:14px}
+.del{background:#500;padding:4px 10px}
+#out{display:none;margin-top:8px}
+#out textarea{width:100%;height:140px;font-size:12px;background:#222;color:#eee}
+.note{font-size:12px;color:#999}
+</style></head><body>
+<div id="toast"></div>
+<div class="row">
+<input id="url" placeholder="YouTubeの動画・再生リストのURL" style="flex:1 1 220px"><button onclick="load()">読込</button>
+</div>
+<div class="row">
+<input id="ta" value="Aチーム" style="flex:1"><input id="tb" value="Bチーム" style="flex:1">
+<button onclick="copyLink()" style="background:#2a5">リンクをコピー</button>
+</div>
+<div id="wrap"><div id="player"></div></div>
+<div id="now"></div>
+<div id="plnav"><button onclick="ready&&P.previousVideo()">◀ 前の動画</button><button onclick="ready&&P.nextVideo()">次の動画 ▶</button></div>
+<div id="msg"></div>
+<div class="btns">
+<button class="sa" onclick="rec('サーブ','A')">サーブ <span id="la"></span></button>
+<button class="sb" onclick="rec('サーブ','B')">サーブ <span id="lb"></span></button>
+<button class="sp" onclick="rec('注目スパイク')">注目スパイク</button>
+<button class="rv" onclick="rec('見返したい')">見返したい</button>
+</div>
+<button class="setbtn" onclick="rec('セット開始')">セット切替（ここから次のセット）</button>
+<div class="sm">
+<button onclick="rec('サーブカット')">サーブカット</button>
+<button onclick="rec('ディグ')">ディグ</button>
+<button onclick="rec('二段')">二段</button>
+</div>
+<div class="sm">
+<button onclick="undo()">一つ戻す</button>
+<button onclick="exportCSV()">CSV書き出し</button>
+<button onclick="$('file').click()">CSV読み込み</button>
+</div>
+<input type="file" id="file" accept=".csv,text/csv,text/plain" style="display:none" onchange="importCSV(this)">
+<div id="out">
+<div class="row"><button onclick="copyText($('csvtxt').value,'CSVをコピーしました')">コピー</button><button onclick="$('out').style.display='none'">閉じる</button></div>
+<textarea id="csvtxt" readonly></textarea>
+<div class="note">ファイルが保存されない場合は、コピーしてメモアプリなどに貼り付けてください。</div>
+</div>
+<div class="row" style="justify-content:space-between;align-items:center;margin-top:8px">
+<span id="count" class="note"></span>
+<button onclick="if(L.length&&confirm('記録を全部消しますか？')){L=[];order={};draw()}" style="background:#400;padding:6px 12px">全消去</button>
+</div>
+<table><thead><tr><th>時刻</th><th>セット-R</th><th>種類</th><th>サーブ</th><th>メモ</th><th></th></tr></thead><tbody id="list"></tbody></table>
+<script>
+const $=id=>document.getElementById(id);
+let P=null,ready=false,L=[],seq=0,order={};
+let cur={list:'',v:''},wantV='',wantCue=false,pendingSeek=null,initSrc=null,initCue=true;
+const ERR={2:'URLの形式が正しくないかもしれません',5:'このブラウザでは再生できない動画です',100:'動画が見つかりません（非公開・削除の可能性）',101:'この動画は埋め込み再生が禁止されています',150:'この動画は埋め込み再生が禁止されています',153:'開き方の制限で再生できません（Webアドレスで開いてください）'};
+function msg(t){$('msg').textContent=t}
+function toast(t){const e=$('toast');e.textContent=t;e.style.opacity=1;clearTimeout(toast.h);toast.h=setTimeout(()=>e.style.opacity=0,800)}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+
+/* ---------- YouTubeのURLを読む ---------- */
+function parseT(s){if(!s)return 0;s=String(s);if(/^\d+$/.test(s))return +s;
+  const m=s.match(/^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/);return m?(+m[1]||0)*3600+(+m[2]||0)*60+(+m[3]||0):0}
+function parseYT(s){s=(s||'').trim();if(!s)return null;
+  if(/^[\w-]{11}$/.test(s))return{v:s,list:'',index:0,t:0};
+  if(/^(PL|UU|OL|FL|LL)[\w-]{10,}$/.test(s))return{v:'',list:s,index:0,t:0};
+  let u;try{u=new URL(/^https?:\/\//i.test(s)?s:'https://'+s)}catch(e){return null}
+  const q=u.searchParams;let v=q.get('v')||'';
+  const m=u.pathname.match(/^\/(?:shorts|embed|live|v)\/([\w-]{11})/);if(!v&&m)v=m[1];
+  if(!v&&/youtu\.be$/i.test(u.hostname))v=u.pathname.slice(1,12);
+  if(!/^[\w-]{11}$/.test(v))v='';
+  const list=q.get('list')||'';
+  if(!v&&!list)return null;
+  return{v,list,index:+q.get('index')||0,t:parseT(q.get('t')||q.get('start'))}}
+function ytURL(s){if(s.list&&s.v)return'https://www.youtube.com/watch?v='+s.v+'&list='+s.list;
+  if(s.list)return'https://www.youtube.com/playlist?list='+s.list;return'https://www.youtube.com/watch?v='+s.v}
+
+/* ---------- このツールのURLに入っている指定を読む ----------
+   ?yt=<YouTubeのURL>  または  ?v=<動画ID>&list=<再生リストID>
+   ほか &t=90 (開始秒)  &index=3 (再生リストの何本目)  &ta=チーム名  &tb=チーム名 */
+function fromPage(){let q;try{q=new URLSearchParams(location.search)}catch(e){return null}
+  if(q.get('ta'))$('ta').value=q.get('ta');if(q.get('tb'))$('tb').value=q.get('tb');
+  let src=q.get('yt')?parseYT(q.get('yt')):null;
+  const v=q.get('v'),list=q.get('list');
+  if(v||list){src=src||{v:'',list:'',index:0,t:0};
+    if(v&&/^[\w-]{11}$/.test(v))src.v=v;if(list)src.list=list}
+  if(src){if(q.get('index'))src.index=+q.get('index')||0;if(q.get('t'))src.t=parseT(q.get('t'))}
+  return src&&(src.v||src.list)?src:null}
+
+/* ---------- プレーヤー ---------- */
+window.onYouTubeIframeAPIReady=function(){
+  P=new YT.Player('player',{width:'100%',height:'100%',playerVars:{rel:0,playsinline:1},
+    events:{
+      onReady:()=>{ready=true;msg('');if(initSrc){const s=initSrc;initSrc=null;openSrc(s,initCue)}},
+      onStateChange:onState,
+      onError:e=>msg(ERR[e.data]||('動画エラー（コード '+e.data+'）'))
+    }});
+};
+(function(){const s=document.createElement('script');s.src='https://www.youtube.com/iframe_api';
+  s.onerror=()=>msg('YouTubeのプレーヤーを読み込めませんでした（通信を確認してください）');
+  document.head.appendChild(s);
+  setTimeout(()=>{if(!ready)msg('プレーヤーの準備に時間がかかっています…')},5000);})();
+
+function vidNow(){try{return P.getVideoData().video_id||''}catch(e){return''}}
+function openSrc(src,cue){if(!src)return;
+  cur={list:src.list,v:src.v};$('url').value=ytURL(src);
+  $('plnav').style.display=src.list?'grid':'none';
+  if(!ready){initSrc=src;initCue=cue;msg('プレーヤー準備中…準備できたら自動で読み込みます');return}
+  msg('');
+  if(src.list){
+    wantV=src.index?'':src.v;wantCue=cue;
+    pendingSeek=src.t?{v:src.v||'*',t:src.t}:null;
+    const o={list:src.list,listType:'playlist',index:src.index?src.index-1:0};
+    cue?P.cuePlaylist(o):P.loadPlaylist(o);
+  }else{
+    wantV='';pendingSeek=null;
+    const o={videoId:src.v,startSeconds:src.t||0};
+    cue?P.cueVideoById(o):P.loadVideoById(o);
+  }
+  setTimeout(updateURL,0);
+}
+function load(){const s=parseYT($('url').value);if(!s){msg('YouTubeの動画か再生リストのURLを入れてください');return}openSrc(s,false)}
+function onState(e){const s=e.data;
+  if(wantV&&(s===1||s===3||s===5)){let pl=null;try{pl=P.getPlaylist()}catch(x){}
+    if(pl&&pl.length){const idx=pl.indexOf(wantV);wantV='';
+      if(idx>=0&&idx!==P.getPlaylistIndex()){
+        wantCue?P.cuePlaylist({list:cur.list,listType:'playlist',index:idx}):P.playVideoAt(idx);return}}}
+  if(pendingSeek&&s===1){const id=vidNow();
+    if(pendingSeek.v==='*'||pendingSeek.v===id){const t=pendingSeek.t;pendingSeek=null;P.seekTo(t,true)}}
+  showNow();updateURL();
+}
+function showNow(){if(!ready)return;let t='';
+  try{const d=P.getVideoData(),pl=P.getPlaylist();
+    if(cur.list&&pl&&pl.length)t=(P.getPlaylistIndex()+1)+' / '+pl.length+' 本目　';t+=d.title||''}catch(e){}
+  $('now').textContent=t}
+
+/* ---------- 共有リンク ---------- */
+function shareQuery(){const p=new URLSearchParams();const v=vidNow()||cur.v;
+  if(v)p.set('v',v);if(cur.list)p.set('list',cur.list);
+  if($('ta').value!=='Aチーム')p.set('ta',$('ta').value);if($('tb').value!=='Bチーム')p.set('tb',$('tb').value);
+  return p.toString()}
+function isWeb(){try{return /^https?:$/.test(location.protocol)}catch(e){return false}}
+function updateURL(){if(!isWeb())return;try{const q=shareQuery();history.replaceState(null,'',location.pathname+(q?'?'+q:''))}catch(e){}}
+function copyLink(){if(!isWeb()){msg('Webアドレスで開いていないので、リンクを作れません');return}
+  const q=shareQuery();copyText(location.origin+location.pathname+(q?'?'+q:''),'リンクをコピーしました')}
+function copyText(text,ok){
+  const fb=()=>{const t=document.createElement('textarea');t.value=text;t.style.position='fixed';t.style.opacity='0';document.body.appendChild(t);
+    t.select();t.setSelectionRange(0,text.length);let done=false;try{done=document.execCommand('copy')}catch(e){}t.remove();
+    done?toast(ok):msg('自動でコピーできませんでした。長押しで選択してコピーしてください')};
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(text).then(()=>toast(ok),fb);else fb()}
+
+/* ---------- 記録 ---------- */
+function fmt(t){t=Math.floor(t);const h=Math.floor(t/3600),m=Math.floor(t%3600/60),s=t%60;return(h?h+':'+String(m).padStart(2,'0'):m)+':'+String(s).padStart(2,'0')}
+function tn(x){return x==='A'?$('ta').value:x==='B'?$('tb').value:''}
+function sortL(){L.sort((a,b)=>(order[a.v]-order[b.v])||(a.t-b.t))}
+function addOrder(v,pi){if(!(v in order))order[v]=pi>=0?pi:1e6+Object.keys(order).length}
+function rec(type,side=''){
+  if(!ready||!P.getCurrentTime){msg('先に動画を読み込んでください');return}
+  const v=vidNow();if(!v){msg('動画が再生されていません');return}
+  const t=+P.getCurrentTime().toFixed(2);let pi=-1,title='';
+  try{title=P.getVideoData().title||'';if(cur.list)pi=P.getPlaylistIndex()}catch(e){}
+  addOrder(v,pi);
+  L.push({t,type,side,memo:'',n:++seq,v,pi:pi>=0?pi:-1,list:cur.list,title});sortL();draw();
+  if(type==='セット開始'){const i=L.findIndex(x=>x.n===seq);toast(fmt(t)+' 第'+calc()[i].s+'セット開始')}
+  else toast(fmt(t)+' '+type+(side?'（'+tn(side)+'）':''));
+  if(navigator.vibrate)navigator.vibrate(30);
+}
+function undo(){if(!L.length)return;let k=0;L.forEach((e,i)=>{if(e.n>L[k].n)k=i});const e=L.splice(k,1)[0];draw();toast('取り消し: '+e.type)}
+/* セット番号とラリー番号。動画ごとに第1セットから数える。
+   セット切替は、そのセットでサーブが1本以上あったときだけ次のセットに進む
+   （試合開始前に押しても第1セットのまま） */
+function calc(){let s=1,r=0,pv=null,served=false;
+  return L.map(e=>{if(e.v!==pv){pv=e.v;s=1;r=0;served=false}
+    if(e.type==='セット開始'){if(served){s++;r=0;served=false}return{s,r:''}}
+    if(e.type==='サーブ'){r++;served=true}return{s,r}})}
+function draw(){
+  $('la').textContent=$('ta').value;$('lb').textContent=$('tb').value;
+  const C=calc(),multi=cur.list||new Set(L.map(e=>e.v)).size>1;let h='',pv=null;
+  const del=i=>`<button class="del" onclick="event.stopPropagation();L.splice(${i},1);draw()">×</button>`;
+  L.forEach((e,i)=>{
+    if(multi&&e.v!==pv){pv=e.v;h+=`<tr class="grp"><td colspan="6">▶ ${e.pi>=0?(e.pi+1)+'本目　':''}${esc(e.title||e.v)}</td></tr>`}
+    if(e.type==='セット開始'){h+=`<tr class="set" onclick="seek(${i})"><td>${fmt(e.t)}</td><td colspan="4">第${C[i].s}セット 開始</td><td>${del(i)}</td></tr>`;return}
+    h+=`<tr onclick="seek(${i})"><td>${fmt(e.t)}</td><td>${C[i].s}-${C[i].r}</td><td>${esc(e.type)}</td><td>${esc(tn(e.side))}</td><td><input value="${esc(e.memo)}" onclick="event.stopPropagation()" oninput="L[${i}].memo=this.value"></td><td>${del(i)}</td></tr>`});
+  $('list').innerHTML=h;
+  $('count').textContent=L.length?L.length+'件':'';
+}
+function seek(i){if(!ready)return;const e=L[i],st=Math.max(0,e.t-3);
+  if(vidNow()===e.v){P.seekTo(st,true);return}
+  if(e.list){let idx=e.pi;
+    try{const pl=P.getPlaylist();if(cur.list===e.list&&pl){const k=pl.indexOf(e.v);if(k>=0)idx=k}}catch(x){}
+    cur={list:e.list,v:e.v};wantV=e.v;wantCue=false;pendingSeek={v:e.v,t:st};
+    P.loadPlaylist({list:e.list,listType:'playlist',index:Math.max(0,idx)});
+  }else{cur={list:'',v:e.v};wantV='';pendingSeek=null;P.loadVideoById({videoId:e.v,startSeconds:st})}
+  $('plnav').style.display=cur.list?'grid':'none';$('url').value=ytURL(cur);
+}
+
+/* ---------- CSV ---------- */
+const COLS=['video_id','video_title','playlist_id','playlist_index','set','seconds','time','rally','type','serve_side','serve_team','memo'];
+function buildCSV(){const q=v=>'"'+String(v).replace(/"/g,'""')+'"';const C=calc();
+  const rows=[COLS].concat(L.map((e,i)=>[e.v,e.title,e.list,e.pi>=0?e.pi+1:'',C[i].s,e.t,fmt(e.t),C[i].r,e.type,e.side,tn(e.side),e.memo]));
+  return rows.map(r=>r.map(q).join(',')).join('\n')}
+function exportCSV(){
+  if(!L.length){msg('まだ記録がありません');return}
+  const csv=buildCSV();$('csvtxt').value=csv;$('out').style.display='block';
+  const name='volley_tags_'+(cur.list||L[0].v||'video')+'.csv';
+  try{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv'}));
+    a.download=name;document.body.appendChild(a);a.click();a.remove()}catch(e){}
+}
+function parseCSV(s){s=s.replace(/^﻿/,'');const rows=[];let r=[],f='',q=false;
+  for(let i=0;i<s.length;i++){const c=s[i];
+    if(q){if(c==='"'){if(s[i+1]==='"'){f+='"';i++}else q=false}else f+=c}
+    else if(c==='"')q=true;else if(c===','){r.push(f);f=''}
+    else if(c==='\n'){r.push(f);rows.push(r);r=[];f=''}else if(c!=='\r')f+=c}
+  if(f||r.length){r.push(f);rows.push(r)}return rows}
+function importCSV(inp){const file=inp.files[0];if(!file)return;const fr=new FileReader();
+  fr.onload=()=>{try{
+    const rows=parseCSV(fr.result),h=rows.shift(),ix=k=>h.indexOf(k);
+    if(ix('seconds')<0||ix('type')<0)throw 0;
+    const add=rows.filter(r=>r.length>1).map(r=>{const g=k=>ix(k)>=0?(r[ix(k)]||''):'';
+      const pi=g('playlist_index')?(+g('playlist_index')-1):-1;
+      return{t:+g('seconds'),type:g('type'),side:g('serve_side'),memo:g('memo'),n:++seq,v:g('video_id'),pi,list:g('playlist_id'),title:g('video_title')}});
+    if(L.length&&!confirm('今の記録を読み込んだ内容に置き換えますか？')){inp.value='';return}
+    order={};add.forEach(e=>addOrder(e.v,e.pi));L=add;sortL();draw();
+    const f=L[0];
+    if(f&&f.v&&vidNow()!==f.v&&!(f.list&&f.list===cur.list))openSrc({v:f.v,list:f.list,index:f.pi>=0?f.pi+1:0,t:0},false);
+    toast(L.length+'件読み込みました')}catch(e){msg('このCSVは読み込めませんでした')}inp.value=''};
+  fr.readAsText(file)}
+
+window.addEventListener('beforeunload',e=>{if(L.length){e.preventDefault();e.returnValue=''}});
+$('ta').oninput=$('tb').oninput=()=>{draw();updateURL()};
+draw();
+const first=fromPage();if(first)openSrc(first,true);
+</script></body></html>
