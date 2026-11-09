@@ -40,6 +40,8 @@ td input{width:100%;padding:4px;font-size:14px}
 .del{background:#500;padding:4px 10px}
 #out{display:none;margin-top:8px}
 #out textarea{width:100%;height:140px;font-size:12px;background:#222;color:#eee}
+.lead{display:flex;align-items:center;gap:6px;font-size:14px;color:#ccc;margin:4px 0 6px}
+.lead input{width:4.5em;padding:6px;text-align:right;background:#222;color:#eee;border:1px solid #444}
 .note{font-size:12px;color:#999}
 </style></head><body>
 <div id="toast"></div>
@@ -73,6 +75,7 @@ td input{width:100%;padding:4px;font-size:14px}
 <button onclick="exportCSV()">CSV書き出し</button>
 <button onclick="$('file').click()">CSV読み込み</button>
 </div>
+<label class="lead">記録する時刻：ボタンを押した<input id="lead" type="number" inputmode="decimal" min="0" step="0.5" value="3">秒前</label>
 <input type="file" id="file" accept=".csv,text/csv,text/plain" style="display:none" onchange="importCSV(this)">
 <div id="out">
 <div class="row"><button onclick="copyText($('csvtxt').value,'コピーしました')">コピー</button><button onclick="$('out').style.display='none'">閉じる</button></div>
@@ -254,11 +257,15 @@ function syncNames(){const v=vidNow();if(!v||v===shownV)return;shownV=v;
 function tn(x,v){const n=namesOf(v);return x==='A'?n.a:x==='B'?n.b:''}
 function sortL(){L.sort((a,b)=>(order[a.v]-order[b.v])||(a.t-b.t))}
 function addOrder(v,pi){if(!(v in order))order[v]=pi>=0?pi:1e6+Object.keys(order).length}
+/* 記録する時刻は、押した時刻から何秒前にするか（プレーが起きてから押すまでの遅れの分）。ブラウザに覚えておく */
+function leadSec(){const x=parseFloat($('lead').value);return x>0?x:0}
+try{const x=localStorage.getItem('vt_lead');if(x!==null)$('lead').value=x}catch(e){}
+$('lead').onchange=()=>{$('lead').value=leadSec();try{localStorage.setItem('vt_lead',$('lead').value)}catch(e){}};
 function rec(type,side=''){
   if(!ready||!P.getCurrentTime){msg('先に動画を読み込んでください');return}
   const v=vidNow();if(!v){msg('動画が再生されていません');return}
   syncNames();if(!TN[v])TN[v]=inNames();
-  const t=+P.getCurrentTime().toFixed(2);let pi=-1,title='';
+  const t=+Math.max(0,P.getCurrentTime()-leadSec()).toFixed(2);let pi=-1,title='';
   try{title=P.getVideoData().title||'';if(cur.list)pi=P.getPlaylistIndex()}catch(e){}
   addOrder(v,pi);if(title)TT[v]=title;
   L.push({t,type,side,memo:'',n:++seq,v,pi:pi>=0?pi:-1,list:cur.list,title});sortL();draw();
@@ -294,7 +301,7 @@ function draw(){
   $('sortbtn').textContent=desc?'新しい順 ▼':'古い順 ▲';
   drawSel();
 }
-function seek(i){if(!ready)return;const e=L[i],st=Math.max(0,e.t-3);
+function seek(i){if(!ready)return;const e=L[i],st=e.t;
   if(vidNow()===e.v){P.seekTo(st,true);return}
   if(e.list){let idx=e.pi;
     try{const pl=P.getPlaylist();if(cur.list===e.list&&pl){const k=pl.indexOf(e.v);if(k>=0)idx=k}}catch(x){}
@@ -306,12 +313,12 @@ function seek(i){if(!ready)return;const e=L[i],st=Math.max(0,e.t-3);
 
 /* ---------- YouTubeのコメント用 ----------
    今の動画の記録だけを「時刻 種類」の行にする。時刻はコメント欄でリンクになる。
-   表から飛ぶときと同じく、記録の3秒前を書く */
+   時刻は記録した時刻そのまま */
 function showOut(text,note){$('csvtxt').value=text;$('outnote').textContent=note;$('out').style.display='block'}
 function commentText(){const vs=[...new Set(L.map(e=>e.v))];let v=vidNow();
   if(!vs.includes(v)){if(vs.length===1)v=vs[0];else return null}
   const C=calc(),out=[tn('A',v)+' vs '+tn('B',v)];let ps=0,n=0;
-  L.forEach((e,i)=>{if(e.v!==v)return;const s=C[i].s,ts=fmt(Math.max(0,e.t-3));
+  L.forEach((e,i)=>{if(e.v!==v)return;const s=C[i].s,ts=fmt(e.t);
     if(e.type==='セット開始'){if(s!==ps){out.push('',ts+' ━━ 第'+s+'セット開始 ━━');ps=s}return}
     if(s!==ps){out.push('','━━ 第'+s+'セット ━━');ps=s}
     const m=e.memo.trim();n++;
