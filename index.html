@@ -10,6 +10,10 @@ button:active{filter:brightness(1.4)}
 .row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
 #wrap{width:100%;max-width:960px;aspect-ratio:16/9;background:#000;position:relative}
 #player{position:absolute;inset:0;width:100%;height:100%}
+#tap{position:absolute;left:0;right:0;top:0;bottom:56px;display:none;touch-action:manipulation;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
+#tap.on{display:block}
+.tapfx{position:absolute;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.6);color:#fff;padding:10px 16px;border-radius:24px;font-weight:bold;white-space:nowrap;opacity:0;transition:opacity .3s;pointer-events:none}
+#tapL{left:6%}#tapR{right:6%}#tapC{left:50%;transform:translate(-50%,-50%)}
 #now{font-size:13px;color:#aaa;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #msg{color:#f99;font-size:13px;min-height:1.2em;margin:4px 0}
 .btns{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:6px 0}
@@ -43,7 +47,7 @@ td input{width:100%;padding:4px;font-size:14px}
 <input id="ta" value="Aチーム" style="flex:1"><input id="tb" value="Bチーム" style="flex:1">
 <button onclick="copyLink()" style="background:#2a5">リンクをコピー</button>
 </div>
-<div id="wrap"><div id="player"></div></div>
+<div id="wrap"><div id="player"></div><div id="tap"><div id="tapL" class="tapfx"></div><div id="tapC" class="tapfx"></div><div id="tapR" class="tapfx"></div></div></div>
 <div id="now"></div>
 <select id="plsel" onchange="pick(this.value)"></select>
 <div id="plnav"><button onclick="ready&&P.previousVideo()">◀ 前の動画</button><button onclick="ready&&P.nextVideo()">次の動画 ▶</button></div>
@@ -151,6 +155,7 @@ function openSrc(src,cue){if(!src)return;
 }
 function load(){const s=parseYT($('url').value);if(!s){msg('YouTubeの動画か再生リストのURLを入れてください');return}openSrc(s,false)}
 function onState(e){const s=e.data;
+  $('tap').classList.toggle('on',s===1||s===2||s===3);
   if(wantV&&(s===1||s===3||s===5)){let pl=null;try{pl=P.getPlaylist()}catch(x){}
     if(pl&&pl.length){const idx=pl.indexOf(wantV);wantV='';
       if(idx>=0&&idx!==P.getPlaylistIndex()){
@@ -190,6 +195,30 @@ function fetchTitles(ids){const g=++fetchGen,q=ids.filter(v=>TT[v]===undefined);
   const work=async()=>{while(q.length&&g===fetchGen){const v=q.shift();const t=await getTitle(v);
     if(TT[v]===undefined||t)TT[v]=t;selLater()}};
   for(let k=0;k<4;k++)work()}
+
+/* ---------- 動画の上のタップ ----------
+   iPadなどの埋め込みプレーヤーはダブルタップで10秒スキップできないので、上に透明な層を重ねて自前でやる。
+   左右をダブルタップで10秒戻す・進める（続けてタップするとさらに10秒ずつ）。1回タップは再生/一時停止。
+   下の操作バー（シークバー・全画面など）は覆わない。
+   最初の再生はプレーヤー自体をタップしないと始まらない端末があるので、再生が始まるまでは層を出さない */
+let tapT=0,tapSide='',tapN=0,tapH=null,skipTo=0;
+function tapFx(id,t){const e=$(id);e.textContent=t;e.style.opacity=1;clearTimeout(e.h);e.h=setTimeout(()=>e.style.opacity=0,600)}
+function togglePlay(){if(!ready)return;let s=-1;try{s=P.getPlayerState()}catch(e){}
+  if(s===1||s===3){P.pauseVideo();tapFx('tapC','❚❚')}
+  else{P.playVideo();tapFx('tapC','▶');
+    // 再生できなかったら層を外して、次のタップはプレーヤーに直接届くようにする
+    setTimeout(()=>{let t=-1;try{t=P.getPlayerState()}catch(e){}if(t!==1&&t!==3)$('tap').classList.remove('on')},1000)}}
+$('tap').addEventListener('click',ev=>{
+  const r=$('tap').getBoundingClientRect(),x=(ev.clientX-r.left)/r.width,now=Date.now();
+  const side=x<.4?'L':x>.6?'R':'C';
+  if(side!=='C'&&side===tapSide&&now-tapT<350){clearTimeout(tapH);tapN++;
+    let base=skipTo;if(tapN===1)try{base=P.getCurrentTime()}catch(e){}
+    let dur=0;try{dur=P.getDuration()}catch(e){}
+    skipTo=Math.max(0,base+(side==='L'?-10:10));if(dur)skipTo=Math.min(skipTo,dur-1);
+    P.seekTo(skipTo,true);tapFx('tap'+side,side==='L'?'◀◀ '+tapN*10+'秒':tapN*10+'秒 ▶▶');
+  }else{tapN=0;clearTimeout(tapH);
+    if(side==='C')togglePlay();else tapH=setTimeout(togglePlay,350)}
+  tapSide=side;tapT=now});
 
 /* ---------- 共有リンク ---------- */
 function shareQuery(){const p=new URLSearchParams();const v=vidNow()||cur.v;
