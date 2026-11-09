@@ -1,11 +1,22 @@
 <!DOCTYPE html>
 <html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>バレー動画タグ付け</title>
+<meta name="description" content="YouTubeのバレーボールの試合動画を見ながら、サーブや注目プレーをボタンひとつで記録。点数・セットも自動で数えて、YouTubeのコメント欄に貼れるタイムスタンプも作れます。">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="バレー動画タグ付け">
+<meta property="og:title" content="バレー動画タグ付け">
+<meta property="og:description" content="YouTubeのバレーボールの試合動画を見ながら、サーブや注目プレーをボタンひとつで記録。点数・セットも自動で数えて、YouTubeのコメント欄に貼れるタイムスタンプも作れます。">
+<meta property="og:url" content="https://pinptk.github.io/Volley-video-timelogger/">
+<meta property="og:image" content="https://pinptk.github.io/Volley-video-timelogger/og.png">
+<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
 <style>
 *{box-sizing:border-box}
 body{font-family:-apple-system,sans-serif;margin:0;padding:10px;background:#111;color:#eee;-webkit-text-size-adjust:100%}
 input,button,textarea{font-size:16px;padding:8px;border-radius:8px;border:none}
-button{color:#fff;background:#555;touch-action:manipulation}
+button,.btnlink{color:#fff;background:#555;touch-action:manipulation}
+.btnlink{font-size:16px;padding:8px 12px;border-radius:8px;text-decoration:none;display:inline-flex;align-items:center}
+#ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:16px;background:#0b0b0b;color:#999;font-size:15px;line-height:1.7;z-index:2}
 button:active{filter:brightness(1.4)}
 .row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
 #wrap{width:100%;max-width:960px;aspect-ratio:16/9;background:#000;position:relative}
@@ -96,13 +107,13 @@ td input{width:100%;padding:4px;font-size:14px}
 <div class="row" style="margin:8px 0 0"><button onclick="closeCopy()" style="flex:1">閉じる</button><button id="cgo" onclick="doCopy()" style="flex:1;background:#2a5;font-weight:bold"></button></div>
 </div></div>
 <div class="row">
-<input id="url" placeholder="YouTubeの動画・再生リストのURL" style="flex:1 1 220px"><button onclick="load()">読込</button>
+<input id="url" placeholder="YouTubeの動画・再生リストのURL" style="flex:1 1 220px"><button onclick="load()">読込</button><a class="btnlink" href="help.html" target="_blank" rel="noopener" style="background:#345">使い方</a>
 </div>
 <div class="row">
 <input id="ta" value="Aチーム" style="flex:1"><input id="tb" value="Bチーム" style="flex:1">
 <button onclick="copyLink()" style="background:#2a5">リンクをコピー</button>
 </div>
-<div id="wrap"><div id="player"></div><div id="tap"><div id="tapL" class="tapfx"></div><div id="tapS" class="tapfx">2倍速 ▶▶</div><div id="tapR" class="tapfx"></div></div></div>
+<div id="wrap"><div id="player"></div><div id="ph">YouTubeの動画か再生リストのURLを入れて<br>「読込」を押してください</div><div id="tap"><div id="tapL" class="tapfx"></div><div id="tapS" class="tapfx">2倍速 ▶▶</div><div id="tapR" class="tapfx"></div></div></div>
 <div id="now"></div>
 <select id="plsel" onchange="pick(this.value)"></select>
 <div id="plnav"><button onclick="ready&&P.previousVideo()">◀ 前の動画</button><button onclick="ready&&P.nextVideo()">次の動画 ▶</button></div>
@@ -190,7 +201,7 @@ window.onYouTubeIframeAPIReady=function(){
 function vidNow(){try{return P.getVideoData().video_id||''}catch(e){return''}}
 function openSrc(src,cue){if(!src)return;
   if(src.list!==cur.list){plIds=[];$('plsel').style.display='none'}
-  cur={list:src.list,v:src.v};$('url').value=ytURL(src);
+  cur={list:src.list,v:src.v};$('url').value=ytURL(src);$('ph').style.display='none';
   $('plnav').style.display=src.list?'grid':'none';
   if(!ready){initSrc=src;initCue=cue;msg('プレーヤー準備中…準備できたら自動で読み込みます');return}
   msg('');
@@ -590,7 +601,9 @@ function doImp(){if(!imp)return;
     L.push({t:e.t,type:e.type,side:e.side,memo:e.memo,n:++seq,uid:e.uid||newUid(),v:e.v,pi:e.pi,list:e.list,title:e.title})});
   closeImp();sortL();shownV='';draw();
   const f=add[0];if(f&&!vidNow())openSrc({v:f.v,list:f.list,index:f.pi>=0?f.pi+1:0,t:0},true);
-  syncNames();toast(add.length+'件追加しました'+(fills.length?'（メモ '+fills.length+'件）':''))}
+  syncNames();toast(add.length+'件追加しました'+(fills.length?'（メモ '+fills.length+'件）':''));
+  const vv=viewV(),other=add.filter(e=>e.v!==vv),ov=new Set(other.map(e=>e.v)).size;
+  msg(other.length?'ほかの動画（'+ov+'本）の記録 '+other.length+'件は、その動画を開くと表に出ます':'')}
 
 /* ---------- 自動保存 ----------
    記録・チーム名はブラウザに保存し、どのタブで開いても使えるようにする（vt_data）。

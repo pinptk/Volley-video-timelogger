@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>使い方 - バレー動画タグ付け</title>
+<meta name="description" content="バレー動画タグ付けの使い方。動画の開き方、記録のしかた、点数の数え方、コメント欄用コピー、CSVでの共有など。">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="バレー動画タグ付け">
+<meta property="og:title" content="使い方 - バレー動画タグ付け">
+<meta property="og:description" content="動画の開き方、記録のしかた、点数の数え方、コメント欄用コピー、CSVでの共有など。">
+<meta property="og:url" content="https://pinptk.github.io/Volley-video-timelogger/help.html">
+<meta property="og:image" content="https://pinptk.github.io/Volley-video-timelogger/og.png">
+<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<style>
+*{box-sizing:border-box}
+body{font-family:-apple-system,sans-serif;margin:0;background:#111;color:#e6e6e6;line-height:1.75;-webkit-text-size-adjust:100%}
+main{max-width:720px;margin:0 auto;padding:16px 16px 64px}
+a{color:#7fc4ff}
+h1{font-size:24px;margin:8px 0 4px}
+h2{font-size:19px;margin:36px 0 8px;padding-top:12px;border-top:1px solid #333}
+h3{font-size:16px;margin:20px 0 4px;color:#cfe3ff}
+p{margin:8px 0}
+ul,ol{padding-left:1.4em;margin:6px 0}
+li{margin:4px 0}
+.top{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.btn{display:inline-block;background:#2a5;color:#fff;text-decoration:none;padding:8px 14px;border-radius:8px;font-weight:bold}
+.toc{background:#1b1b1b;border-radius:10px;padding:10px 14px;margin:14px 0}
+.toc ol{margin:0}
+.chip{display:inline-block;padding:1px 8px;border-radius:6px;color:#fff;font-weight:bold;font-size:14px;white-space:nowrap}
+.sa{background:#1e6fd9}.sb{background:#d93a1e}.sp{background:#c99200}.rv{background:#8e3ad9}.st{background:#0b7a75}.gr{background:#555}.gn{background:#2a5}
+.note{background:#1d2633;border-left:4px solid #39f;padding:8px 12px;border-radius:6px;margin:10px 0;font-size:15px}
+.warn{background:#33261a;border-left:4px solid #fc0;padding:8px 12px;border-radius:6px;margin:10px 0;font-size:15px}
+pre{background:#1b1b1b;padding:10px 12px;border-radius:8px;overflow-x:auto;font-size:14px;line-height:1.6}
+table{border-collapse:collapse;width:100%;font-size:15px;margin:8px 0}
+td,th{border-bottom:1px solid #333;padding:6px 4px;text-align:left;vertical-align:top}
+th{white-space:nowrap;color:#aaa;font-weight:normal}
+.y{box-shadow:inset 4px 0 #fc0;padding-left:10px}.b{box-shadow:inset 4px 0 #39f;padding-left:10px}
+</style></head><body><main>
+<div class="top"><h1>使い方</h1><a class="btn" href="./">ツールを開く</a></div>
+<p>YouTube のバレーボールの試合動画を見ながら、サーブや注目プレーをボタンで記録するツールです。記録から点数やセットを数えたり、YouTube のコメント欄に貼れる形でコピーしたり、CSV で仲間と共有したりできます。</p>
+
+<div class="toc"><ol>
+<li><a href="#start">はじめ方</a></li>
+<li><a href="#rec">記録する</a></li>
+<li><a href="#table">記録の表</a></li>
+<li><a href="#score">セット・ラリー・点数</a></li>
+<li><a href="#team">チーム名</a></li>
+<li><a href="#video">動画の操作</a></li>
+<li><a href="#comment">コメント欄用にコピー</a></li>
+<li><a href="#csv">CSV で保存・共有する</a></li>
+<li><a href="#save">記録の保存について</a></li>
+</ol></div>
+
+<h2 id="start">1. はじめ方</h2>
+<ol>
+<li>YouTube の動画か再生リストの URL を入れて「読込」を押します</li>
+<li>チーム名の欄に、2 チームの名前を入れます（左のチームが青、右のチームが赤のボタンになります）</li>
+<li>動画を再生しながら、場面ごとにボタンを押します</li>
+</ol>
+<p>再生リストを読み込むと、動画の下にリスト内の動画が選択欄で並びます。選ぶとその動画に切り替わります。記録がある動画には「［5件］」のように件数が付きます。</p>
+
+<h2 id="rec">2. 記録する</h2>
+<table>
+<tr><th>ボタン</th><th>内容</th></tr>
+<tr><td><span class="chip sa">サーブ</span> <span class="chip sb">サーブ</span></td><td>どちらのチームがサーブしたか。点数とラリー番号はこのサーブの記録から数えます</td></tr>
+<tr><td><span class="chip sp">注目スパイク</span></td><td>注目したいスパイク</td></tr>
+<tr><td><span class="chip rv">見返したい</span></td><td>動画が一時停止して、メモの入力欄が出ます。「記録する」で、ボタンを押した時点の時刻とメモを記録します（メモは省略できます）。閉じると再生に戻ります</td></tr>
+<tr><td><span class="chip st">セット切替</span></td><td>ここから次のセット</td></tr>
+<tr><td><span class="chip gr">取り消す</span></td><td>いま見ている動画で、最後に記録したものを取り消します。確認画面が出ます</td></tr>
+</table>
+<h3>記録する時刻</h3>
+<p>プレーを見てからボタンを押すまでには少し遅れがあるので、記録する時刻は「ボタンを押した 3 秒前」にしています。ボタンの下の「記録する時刻：ボタンを押した ◯ 秒前」で、0〜10 秒から選べます。変えても、すでに記録したものの時刻は変わりません。</p>
+
+<h2 id="table">3. 記録の表</h2>
+<ul>
+<li>表には、いま見ている動画の記録だけが出ます。ほかの動画の記録も保存されていて、その動画を開くと出てきます</li>
+<li>行をタップすると、その記録の時刻から再生します</li>
+<li>メモ欄にはいつでも書き込めます</li>
+<li><span class="y">黄色い線</span> は最後に記録した行、<span class="b">青い線</span> は今の再生位置のすぐ前の記録です</li>
+<li>「新しい順 ▼ / 古い順 ▲」で並び順を切り替えられます</li>
+<li>表の上のボタン（すべて / サーブ / 注目スパイク / 見返したい）で、種類ごとに絞り込めます。選んでいるボタンは緑色になります</li>
+<li>行の「×」でその記録を消します。「この動画の記録を消去」で、いま見ている動画の記録を全部消します</li>
+</ul>
+
+<h2 id="score">4. セット・ラリー・点数</h2>
+<ul>
+<li>「セット-R」は「セット番号-ラリー番号」です。サーブを記録するたびにラリー番号が 1 つ進みます</li>
+<li>「点数」は、そのラリーが始まる時点の「左のチーム-右のチーム」の点数です</li>
+<li>ラリーに勝ったチームが次にサーブするので、セットの 2 本目以降のサーブを、サーブしたチームの 1 点として数えます</li>
+<li>「セット切替」を押すと次のセットになり、点数とラリー番号が 0 に戻ります。そのセットでまだサーブを記録していないときは進みません（試合前に押しても第 1 セットのまま）</li>
+</ul>
+<div class="warn">サーブを記録し忘れると、そこから点数がずれます。また、セットの最後のラリーはどちらが取ったか記録に残らないので、セットの最終スコアは出ません。</div>
+
+<h2 id="team">5. チーム名</h2>
+<ul>
+<li>チーム名は動画ごとに覚えます。1 本の再生リストに別の試合が入っていても大丈夫です</li>
+<li>まだ名前のない動画を開くと、再生リストで手前の動画の名前が入ります。同じ試合の続きならそのまま記録できます</li>
+</ul>
+
+<h2 id="video">6. 動画の操作</h2>
+<p>iPad などでも使いやすいように、動画の真ん中あたりで次の操作ができます。</p>
+<ul>
+<li>左側をダブルタップ：10 秒戻す</li>
+<li>右側をダブルタップ：10 秒進める（続けてタップするとさらに 10 秒ずつ）</li>
+<li>1 回タップ：再生 / 一時停止</li>
+<li>長押し：押している間だけ 2 倍速</li>
+</ul>
+<div class="note">動画の上の帯（設定・音量など）と下の帯（シークバー・全画面ボタンなど）は YouTube のボタンがそのまま使えます。動画を読み込んだ直後は、最初の 1 回だけ YouTube の再生ボタンを押してください。全画面表示中はダブルタップと長押しは使えません。</div>
+
+<h2 id="comment">7. コメント欄用にコピー</h2>
+<p>「コメント欄用にコピー」を押すと、コピーする記録を選ぶ画面が出ます。種類ごとにまとめて選んだり、「一つずつ選ぶ」で 1 件ずつ選んだりできます。YouTube のコメント欄に貼ると、時刻がその場面へのリンクになります。</p>
+<pre>東高 vs 西高
+
+0:00 ━━ 第1セット開始 ━━
+0:07 サーブ（東高） - ナイスコース
+0:12 注目スパイク
+0:37 サーブ（西高）</pre>
+
+<h2 id="csv">8. CSV で保存・共有する</h2>
+<h3>書き出す</h3>
+<p>「CSV書き出し」を押すと、書き出す動画を選べます。初めはいま見ている動画だけが選ばれています。再生リストのほかの動画も、チェックを入れれば一緒に書き出せます。ファイル名は「動画タイトル_日時.csv」です。</p>
+<h3>読み込む（仲間の記録と合わせる）</h3>
+<p>「CSV読み込み」で、CSV の記録を今の記録に<b>追加</b>します（置き換えはしません）。取り込む種類を選べます。</p>
+<p>同じ動画を何人かで別々に記録して渡し合っても、二重にならないようにしています。</p>
+<ul>
+<li>同じ記録は取り込みません（人づてに回ってきた CSV でも）</li>
+<li>サーブは、同じチームのサーブが 6 秒以内にあれば同じサーブとみなします</li>
+<li>セット切替は、5 分以内にあれば同じとみなします</li>
+<li>注目スパイク・見返したいは、メモが違えば別の記録として残します</li>
+<li>同じ記録でも CSV 側にだけあるメモは、今のメモにつなげて残します</li>
+</ul>
+<h3>チーム名が違うとき</h3>
+<p>自分のチーム名と CSV のチーム名が違うと（名前が少し違う、左右が反対など）、読み込み画面で「どちらがどちらか」を選びます。記録の中身は CSV の名前と並びに合わせ、画面は自分の名前と並びのまま表示します。</p>
+<div class="note">ほかの動画の記録を読み込んだときは、その動画を開くと表に出てきます。</div>
+
+<h2 id="save">9. 記録の保存について</h2>
+<ul>
+<li>記録とチーム名は、ブラウザに自動で保存されます。閉じたり読み込み直したりしても消えません</li>
+<li>何も指定せずにページを開くと空の状態で始まります。同じタブで読み込み直したときは、見ていた動画をもう一度開きます</li>
+<li>複数のタブで開いて記録しても大丈夫です</li>
+</ul>
+<div class="warn">保存先はそのブラウザの中だけです。別の端末には引き継がれません。iPhone・iPad の Safari は、7 日間ページを開かないと記録を消すことがあります。大事な記録は CSV で書き出しておいてください。</div>
+
+<p style="margin-top:32px"><a class="btn" href="./">ツールを開く</a></p>
+</main></body></html>
