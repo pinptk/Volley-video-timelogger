@@ -67,6 +67,13 @@ td input{width:100%;padding:4px;font-size:14px}
 <div id="undotxt" style="margin:12px 0;color:#ccc"></div>
 <div class="row" style="margin:0"><button onclick="closeUndo(false)" style="flex:1">キャンセル</button><button onclick="closeUndo(true)" style="flex:1;background:#b33;font-weight:bold">取り消す</button></div>
 </div></div>
+<div id="mimp" class="modal"><div class="mbox">
+<div class="mt">CSV読み込み</div>
+<div id="ifile" class="note" style="margin:4px 0 8px"></div>
+<div id="itypes" class="ctypes"></div>
+<div class="note" style="margin-top:8px">今の記録に追加します。同じ動画・同じ種類・ほぼ同じ時刻（1秒未満の差）の記録は重複として取り込みません。</div>
+<div class="row" style="margin:10px 0 0"><button onclick="closeImp()" style="flex:1">キャンセル</button><button id="igo" onclick="doImp()" style="flex:1;background:#2a5;font-weight:bold"></button></div>
+</div></div>
 <div id="mcopy" class="modal"><div class="mbox">
 <div class="mt">コメント欄用にコピー</div>
 <div id="cvid" class="note" style="margin:4px 0 8px"></div>
@@ -331,7 +338,7 @@ function closeMemo(ok){if(!pendRV)return;const p=pendRV;pendRV=null;
   resumePlay(p.resume)}
 $('mform').onsubmit=e=>{e.preventDefault();closeMemo(true)};
 document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;
-  if(pendRV)closeMemo(false);else if(pendUndo)closeUndo(false);else if($('mcopy').classList.contains('on'))closeCopy()});
+  if(pendRV)closeMemo(false);else if(pendUndo)closeUndo(false);else if($('mcopy').classList.contains('on'))closeCopy();else if(imp)closeImp()});
 /* 取り消す：最後に記録したものを、確認してから消す */
 let pendUndo=null;
 function recLabel(e,i){const C=calc();
@@ -452,24 +459,49 @@ function parseCSV(s){s=s.replace(/^﻿/,'');const rows=[];let r=[],f='',q=false;
     else if(c==='"')q=true;else if(c===','){r.push(f);f=''}
     else if(c==='\n'){r.push(f);rows.push(r);r=[];f=''}else if(c!=='\r')f+=c}
   if(f||r.length){r.push(f);rows.push(r)}return rows}
+/* 読み込みは今の記録に追加する。取り込む種類を選べる。
+   同じ動画・種類・サーブ側で時刻の差が1秒未満のものは重複として取り込まない
+   （重複でも、今の記録のメモが空で読み込む側にメモがあれば、メモだけ写す）。
+   チーム名は、まだ名前のない動画にだけ入れる */
+let imp=null;
+const TLABEL=t=>t==='セット開始'?'セット切替':t;
+function findDup(e){return L.find(x=>x.v===e.v&&x.type===e.type&&x.side===e.side&&Math.abs(x.t-e.t)<1)}
 function importCSV(inp){const file=inp.files[0];if(!file)return;const fr=new FileReader();
-  fr.onload=()=>{try{
+  fr.onload=()=>{inp.value='';try{
     const rows=parseCSV(fr.result),h=rows.shift(),ix=k=>h.indexOf(k);
     if(ix('seconds')<0||ix('type')<0)throw 0;
     const nm={};
-    const add=rows.filter(r=>r.length>1).map(r=>{const g=k=>ix(k)>=0?(r[ix(k)]||''):'';
+    const recs=rows.filter(r=>r.length>1).map(r=>{const g=k=>ix(k)>=0?(r[ix(k)]||''):'';
       const o=nm[g('video_id')]=nm[g('video_id')]||{},sd=g('serve_side').toLowerCase();
       if(g('team_a'))o.a=g('team_a');if(g('team_b'))o.b=g('team_b');
       if((sd==='a'||sd==='b')&&!o[sd]&&g('serve_team'))o[sd]=g('serve_team');
       const pi=g('playlist_index')?(+g('playlist_index')-1):-1;
-      return{t:+g('seconds'),type:g('type'),side:g('serve_side'),memo:g('memo'),n:++seq,v:g('video_id'),pi,list:g('playlist_id'),title:g('video_title')}});
-    if(L.length&&!confirm('今の記録を読み込んだ内容に置き換えますか？')){inp.value='';return}
-    const d=inNames();Object.keys(nm).forEach(v=>{TN[v]={a:nm[v].a||d.a,b:nm[v].b||d.b}});shownV='';
-    order={};add.forEach(e=>{addOrder(e.v,e.pi);if(e.title)TT[e.v]=e.title});L=add;sortL();draw();
-    const f=L[0];
-    if(f&&f.v&&vidNow()!==f.v&&!(f.list&&f.list===cur.list))openSrc({v:f.v,list:f.list,index:f.pi>=0?f.pi+1:0,t:0},false);
-    syncNames();toast(L.length+'件読み込みました')}catch(e){msg('このCSVは読み込めませんでした')}inp.value=''};
+      return{t:+g('seconds')||0,type:g('type'),side:g('serve_side'),memo:g('memo'),v:g('video_id'),pi,list:g('playlist_id'),title:g('video_title')}})
+      .filter(e=>e.type&&e.v);
+    if(!recs.length)throw 0;
+    recs.forEach(e=>e.dup=findDup(e));
+    imp={recs,nm,on:new Set(recs.map(e=>e.type))};
+    const vs=new Set(recs.map(e=>e.v));
+    $('ifile').textContent=file.name+'　（動画 '+vs.size+' 本・'+recs.length+' 件）';
+    drawImp();$('mimp').classList.add('on')}catch(e){msg('このCSVは読み込めませんでした')}};
   fr.readAsText(file)}
+function drawImp(){const types=[...new Set(imp.recs.map(e=>e.type))];
+  $('itypes').innerHTML=types.map((t,k)=>{const all=imp.recs.filter(e=>e.type===t),dup=all.filter(e=>e.dup).length;
+    return`<label><input type="checkbox" data-k="${k}" ${imp.on.has(t)?'checked':''}>${esc(TLABEL(t))}<span class="note">（追加 ${all.length-dup}件${dup?'・重複 '+dup+'件':''}）</span></label>`}).join('');
+  $('itypes').querySelectorAll('input').forEach(inp=>inp.onchange=()=>{const t=types[+inp.dataset.k];inp.checked?imp.on.add(t):imp.on.delete(t);drawImp()});
+  const n=imp.recs.filter(e=>imp.on.has(e.type)&&!e.dup).length;
+  $('igo').textContent='追加（'+n+'件）';$('igo').disabled=!n&&!memoFills().length;$('igo').style.opacity=$('igo').disabled?.5:1}
+function memoFills(){return imp.recs.filter(e=>imp.on.has(e.type)&&e.dup&&!e.dup.memo.trim()&&e.memo.trim())}
+function closeImp(){imp=null;$('mimp').classList.remove('on')}
+function doImp(){if(!imp)return;
+  const add=imp.recs.filter(e=>imp.on.has(e.type)&&!e.dup),fills=memoFills(),d=inNames();
+  fills.forEach(e=>e.dup.memo=e.memo);
+  add.forEach(e=>{if(!TN[e.v]){const o=imp.nm[e.v]||{};TN[e.v]={a:o.a||d.a,b:o.b||d.b}}
+    addOrder(e.v,e.pi);if(e.title&&!TT[e.v])TT[e.v]=e.title;
+    L.push({t:e.t,type:e.type,side:e.side,memo:e.memo,n:++seq,v:e.v,pi:e.pi,list:e.list,title:e.title})});
+  closeImp();sortL();shownV='';draw();
+  const f=add[0];if(f&&!vidNow())openSrc({v:f.v,list:f.list,index:f.pi>=0?f.pi+1:0,t:0},true);
+  syncNames();toast(add.length+'件追加しました'+(fills.length?'（メモ '+fills.length+'件）':''))}
 
 /* ---------- 自動保存 ----------
    記録・チーム名・見ていた動画と位置をブラウザに保存し、開き直したときに戻す。
