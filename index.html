@@ -593,29 +593,53 @@ function doImp(){if(!imp)return;
   syncNames();toast(add.length+'件追加しました'+(fills.length?'（メモ '+fills.length+'件）':''))}
 
 /* ---------- 自動保存 ----------
-   記録・チーム名・見ていた動画と位置をブラウザに保存し、開き直したときに戻す。
+   記録・チーム名はブラウザに保存し、どのタブで開いても使えるようにする（vt_data）。
+   ほかのタブで記録が変わったら、このタブの表も合わせる（上書きして消さないように）。
+   開いていた動画はタブごとに覚えておき（sessionStorage）、同じタブで読み込み直したときだけ開き直す。
+   何も指定せずに新しいタブで開いたときは空の状態にする。
+   動画ごとの見ていた位置も覚えておき、同じ動画を開いたらそこから（vt_pos）。
    保存できない環境（プライベートブラウズなど）のときだけ、閉じる前に確認を出す */
-const SKEY='vt_data';let saveOK=false,restored=false,lastSrc=null;
-function save(){if(!restored)return;let t=0,v=cur.v,st=-1;
+const SKEY='vt_data',PKEY='vt_pos',TKEY='vt_tab';
+let saveOK=false,restored=false,syncing=false,lastData='',tabSrc=null,POS={};
+function save(){if(!restored||syncing)return;let t=0,v=cur.v,st=-1;
   try{if(ready){v=vidNow()||cur.v;t=Math.floor(P.getCurrentTime()||0);st=P.getPlayerState()}}catch(e){}
-  // まだ再生していない間は位置が0になるので、同じ動画なら前回の位置を残す
-  if((st===-1||st===5||!t)&&lastSrc&&lastSrc.v===v&&lastSrc.list===cur.list)t=lastSrc.t||0;
-  if(v||cur.list)lastSrc={v,list:cur.list,t};  // まだ何も開いていないときは前回の動画を残す
-  try{localStorage.setItem(SKEY,JSON.stringify({ver:1,L,TN,VW,order,src:lastSrc}));saveOK=true}catch(e){saveOK=false}}
-function restoreData(){let d=null;try{d=JSON.parse(localStorage.getItem(SKEY)||'null')}catch(e){}
-  restored=true;if(!d||d.ver!==1)return null;
+  // まだ再生していない間は位置が0になるので、前に覚えた位置を残す
+  const live=!(st===-1||st===5||!t);
+  if(v&&live)POS[v]=t;
+  if(v||cur.list)tabSrc={v,list:cur.list,t:v?POS[v]||0:0};
+  try{
+    const data=JSON.stringify({ver:1,L,TN,VW,order});
+    if(data!==lastData){localStorage.setItem(SKEY,data);lastData=data}
+    const ks=Object.keys(POS);if(ks.length>300)ks.slice(0,ks.length-300).forEach(k=>delete POS[k]);
+    localStorage.setItem(PKEY,JSON.stringify(POS));saveOK=true}catch(e){saveOK=false}
+  try{if(tabSrc)sessionStorage.setItem(TKEY,JSON.stringify(tabSrc))}catch(e){}}
+function applyData(d){
   L=Array.isArray(d.L)?d.L:[];TN=d.TN||{};VW=d.VW||{};order=d.order||{};
-  seq=L.reduce((m,e)=>Math.max(m,e.n||0),0);L.forEach(e=>{if(!e.uid)e.uid=newUid()});L.forEach(e=>{if(e.title&&!TT[e.v])TT[e.v]=e.title});
-  lastSrc=d.src||null;return d.src&&(d.src.v||d.src.list)?d.src:null}
+  seq=Math.max(seq,L.reduce((m,e)=>Math.max(m,e.n||0),0));
+  L.forEach(e=>{if(!e.uid)e.uid=newUid();if(e.title&&!TT[e.v])TT[e.v]=e.title})}
+function restoreData(){let d=null;
+  try{lastData=localStorage.getItem(SKEY)||'';d=JSON.parse(lastData||'null')}catch(e){}
+  try{POS=JSON.parse(localStorage.getItem(PKEY)||'{}')||{}}catch(e){POS={}}
+  try{tabSrc=JSON.parse(sessionStorage.getItem(TKEY)||'null')}catch(e){tabSrc=null}
+  restored=true;
+  if(d&&d.ver===1){applyData(d);
+    if(d.src&&d.src.v&&!(d.src.v in POS))POS[d.src.v]=d.src.t||0}}  // 前の版の保存形式から位置を引き継ぐ
+window.addEventListener('storage',e=>{if(e.key!==SKEY||!e.newValue||e.newValue===lastData)return;
+  let d=null;try{d=JSON.parse(e.newValue)}catch(x){}if(!d||d.ver!==1)return;
+  lastData=e.newValue;applyData(d);
+  // 開いているポップアップは古い記録を見ているので閉じる
+  if(imp)closeImp();if($('mcopy').classList.contains('on'))closeCopy();if($('mexp').classList.contains('on'))closeExp();
+  syncing=true;try{const v=vidNow();if(v&&TN[v]){const n=dispLR(v);$('ta').value=n.a;$('tb').value=n.b}draw()}finally{syncing=false}});
 window.addEventListener('pagehide',save);
 document.addEventListener('visibilitychange',()=>{if(document.hidden)save()});
 window.addEventListener('beforeunload',e=>{if(L.length&&!saveOK){e.preventDefault();e.returnValue=''}});
 $('ta').oninput=$('tb').oninput=()=>{const v=vidNow();if(v){shownV=v;namesFromInputs(v)}draw();updateURL()};
-const last=restoreData();
+restoreData();
 draw();
-/* URLに動画の指定があればそれを開く。同じ動画（再生リスト）なら前回見ていた位置から */
+/* URLに動画の指定があればそれを開く。なければ、このタブで開いていた動画（読み込み直したとき）。
+   どちらもなければ空のまま。同じ動画なら前に見ていた位置から */
 let first=fromPage();
-if(first&&last&&!first.t&&(first.list?first.list===last.list:first.v===last.v)){if(!first.list||!first.v||first.v===last.v)first.t=last.t;if(first.list&&!first.v)first.v=last.v}
-if(!first&&last)first={v:last.v||'',list:last.list||'',index:0,t:last.t||0};
+if(!first&&tabSrc&&(tabSrc.v||tabSrc.list))first={v:tabSrc.v||'',list:tabSrc.list||'',index:0,t:0};
+if(first&&!first.t){if(!first.v&&first.list&&tabSrc&&tabSrc.list===first.list)first.v=tabSrc.v||'';if(first.v&&POS[first.v])first.t=POS[first.v]}
 if(first)openSrc(first,true);
 </script></body></html>
