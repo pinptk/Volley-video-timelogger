@@ -475,9 +475,11 @@ function expPick(all){eSel=new Set(all?eVids:eVids.filter(v=>v===vidNow()));draw
 function closeExp(){$('mexp').classList.remove('on')}
 function doExp(){if(!eSel.size)return;const csv=buildCSV(eSel);closeExp();
   showOut(csv,'ファイルが保存されない場合は、コピーしてメモアプリなどに貼り付けてください。');
-  const one=[...eSel][0],d=new Date(),ymd=d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');
-  // 日本語のファイル名は端末によって無視されるので英数字にする
-  const name='volley_'+(eSel.size===1?one:eSel.size+'videos')+'_'+ymd+'.csv';
+  // ファイル名は「動画タイトル_書き出した日時」。複数の動画なら「最初の動画タイトル_他◯本_日時」
+  const vs=eVids.filter(v=>eSel.has(v)),one=vs[0],d=new Date(),p2=x=>String(x).padStart(2,'0');
+  const stamp=d.getFullYear()+p2(d.getMonth()+1)+p2(d.getDate())+'_'+p2(d.getHours())+p2(d.getMinutes());
+  const ttl=String(TT[one]||(L.find(e=>e.v===one)||{}).title||one).replace(/[\\/:*?"<>|\x00-\x1f]+/g,'_').replace(/\s+/g,' ').trim().slice(0,80)||one;
+  const name=ttl+(vs.length>1?'_他'+(vs.length-1)+'本':'')+'_'+stamp+'.csv';
   try{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv'}));
     a.download=name;document.body.appendChild(a);a.click();a.remove()}catch(e){}
 }
