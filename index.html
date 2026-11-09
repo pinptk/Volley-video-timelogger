@@ -10,10 +10,10 @@ button:active{filter:brightness(1.4)}
 .row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
 #wrap{width:100%;max-width:960px;aspect-ratio:16/9;background:#000;position:relative}
 #player{position:absolute;inset:0;width:100%;height:100%}
-#tap{position:absolute;left:0;right:0;top:0;bottom:56px;display:none;touch-action:manipulation;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
+#tap{position:absolute;left:0;right:0;top:0;bottom:56px;display:none;touch-action:manipulation;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 #tap.on{display:block}
 .tapfx{position:absolute;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.6);color:#fff;padding:10px 16px;border-radius:24px;font-weight:bold;white-space:nowrap;opacity:0;transition:opacity .3s;pointer-events:none}
-#tapL{left:6%}#tapR{right:6%}#tapC{left:50%;transform:translate(-50%,-50%)}
+#tapL{left:6%}#tapR{right:6%}#tapS{top:12%;left:50%;transform:translateX(-50%)}
 #now{font-size:13px;color:#aaa;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #msg{color:#f99;font-size:13px;min-height:1.2em;margin:4px 0}
 .btns{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:6px 0}
@@ -41,7 +41,7 @@ td input{width:100%;padding:4px;font-size:14px}
 #out{display:none;margin-top:8px}
 #out textarea{width:100%;height:140px;font-size:12px;background:#222;color:#eee}
 .lead{display:flex;align-items:center;gap:6px;font-size:14px;color:#ccc;margin:4px 0 6px}
-.lead input{width:4.5em;padding:6px;text-align:right;background:#222;color:#eee;border:1px solid #444}
+.lead select{font-size:16px;padding:6px;border-radius:8px;background:#222;color:#eee;border:1px solid #444}
 .note{font-size:12px;color:#999}
 </style></head><body>
 <div id="toast"></div>
@@ -52,7 +52,7 @@ td input{width:100%;padding:4px;font-size:14px}
 <input id="ta" value="Aチーム" style="flex:1"><input id="tb" value="Bチーム" style="flex:1">
 <button onclick="copyLink()" style="background:#2a5">リンクをコピー</button>
 </div>
-<div id="wrap"><div id="player"></div><div id="tap"><div id="tapL" class="tapfx"></div><div id="tapC" class="tapfx"></div><div id="tapR" class="tapfx"></div></div></div>
+<div id="wrap"><div id="player"></div><div id="tap"><div id="tapL" class="tapfx"></div><div id="tapS" class="tapfx">2倍速 ▶▶</div><div id="tapR" class="tapfx"></div></div></div>
 <div id="now"></div>
 <select id="plsel" onchange="pick(this.value)"></select>
 <div id="plnav"><button onclick="ready&&P.previousVideo()">◀ 前の動画</button><button onclick="ready&&P.nextVideo()">次の動画 ▶</button></div>
@@ -75,7 +75,7 @@ td input{width:100%;padding:4px;font-size:14px}
 <button onclick="exportCSV()">CSV書き出し</button>
 <button onclick="$('file').click()">CSV読み込み</button>
 </div>
-<label class="lead">記録する時刻：ボタンを押した<input id="lead" type="number" inputmode="decimal" min="0" step="0.5" value="3">秒前</label>
+<label class="lead">記録する時刻：ボタンを押した<select id="lead"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option></select>秒前</label>
 <input type="file" id="file" accept=".csv,text/csv,text/plain" style="display:none" onchange="importCSV(this)">
 <div id="out">
 <div class="row"><button onclick="copyText($('csvtxt').value,'コピーしました')">コピー</button><button onclick="$('out').style.display='none'">閉じる</button></div>
@@ -206,16 +206,28 @@ function fetchTitles(ids){const g=++fetchGen,q=ids.filter(v=>TT[v]===undefined);
 /* ---------- 動画の上のタップ ----------
    iPadなどの埋め込みプレーヤーはダブルタップで10秒スキップできないので、上に透明な層を重ねて自前でやる。
    左右をダブルタップで10秒戻す・進める（続けてタップするとさらに10秒ずつ）。1回タップは再生/一時停止。
+   長押ししている間は2倍速。
    下の操作バー（シークバー・全画面など）は覆わない。
    最初の再生はプレーヤー自体をタップしないと始まらない端末があるので、再生が始まるまでは層を出さない */
 let tapT=0,tapSide='',tapN=0,tapH=null,skipTo=0;
+/* 長押し2倍速。押して0.5秒たったら2倍速にし、指を離したら元の速さに戻す */
+let lpH=null,lpOn=false,lpUsed=false,lpRate=1,lpX=0,lpY=0;
+function lpEnd(){clearTimeout(lpH);lpH=null;if(!lpOn)return;lpOn=false;$('tapS').style.opacity=0;try{P.setPlaybackRate(lpRate)}catch(e){}}
+$('tap').addEventListener('pointerdown',ev=>{lpUsed=false;lpX=ev.clientX;lpY=ev.clientY;clearTimeout(lpH);
+  lpH=setTimeout(()=>{lpUsed=true;tapSide='';clearTimeout(tapH);  // 長押しはタップとして扱わない
+    let s=-1;try{s=P.getPlayerState()}catch(e){}if(s!==1&&s!==3)return;
+    try{lpRate=P.getPlaybackRate()||1}catch(e){lpRate=1}
+    lpOn=true;P.setPlaybackRate(2);$('tapS').style.opacity=1},500)});
+$('tap').addEventListener('pointermove',ev=>{if(!lpOn&&lpH&&Math.hypot(ev.clientX-lpX,ev.clientY-lpY)>15){clearTimeout(lpH);lpH=null}});
+['pointerup','pointercancel'].forEach(k=>window.addEventListener(k,lpEnd));
+$('tap').addEventListener('contextmenu',ev=>ev.preventDefault());
 function tapFx(id,t){const e=$(id);e.textContent=t;e.style.opacity=1;clearTimeout(e.h);e.h=setTimeout(()=>e.style.opacity=0,600)}
 function togglePlay(){if(!ready)return;let s=-1;try{s=P.getPlayerState()}catch(e){}
-  if(s===1||s===3){P.pauseVideo();tapFx('tapC','❚❚')}
-  else{P.playVideo();tapFx('tapC','▶');
+  if(s===1||s===3)P.pauseVideo();
+  else{P.playVideo();
     // 再生できなかったら層を外して、次のタップはプレーヤーに直接届くようにする
     setTimeout(()=>{let t=-1;try{t=P.getPlayerState()}catch(e){}if(t!==1&&t!==3)$('tap').classList.remove('on')},1000)}}
-$('tap').addEventListener('click',ev=>{
+$('tap').addEventListener('click',ev=>{if(lpUsed){lpUsed=false;return}
   const r=$('tap').getBoundingClientRect(),x=(ev.clientX-r.left)/r.width,now=Date.now();
   const side=x<.4?'L':x>.6?'R':'C';
   if(side!=='C'&&side===tapSide&&now-tapT<350){clearTimeout(tapH);tapN++;
@@ -258,9 +270,9 @@ function tn(x,v){const n=namesOf(v);return x==='A'?n.a:x==='B'?n.b:''}
 function sortL(){L.sort((a,b)=>(order[a.v]-order[b.v])||(a.t-b.t))}
 function addOrder(v,pi){if(!(v in order))order[v]=pi>=0?pi:1e6+Object.keys(order).length}
 /* 記録する時刻は、押した時刻から何秒前にするか（プレーが起きてから押すまでの遅れの分）。ブラウザに覚えておく */
-function leadSec(){const x=parseFloat($('lead').value);return x>0?x:0}
-try{const x=localStorage.getItem('vt_lead');if(x!==null)$('lead').value=x}catch(e){}
-$('lead').onchange=()=>{$('lead').value=leadSec();try{localStorage.setItem('vt_lead',$('lead').value)}catch(e){}};
+function leadSec(){return +$('lead').value||0}
+try{const x=localStorage.getItem('vt_lead');if(x!==null){const k=Math.min(10,Math.max(0,Math.round(+x)||0));$('lead').value=String(k)}}catch(e){}
+$('lead').onchange=()=>{try{localStorage.setItem('vt_lead',$('lead').value)}catch(e){}};
 function rec(type,side=''){
   if(!ready||!P.getCurrentTime){msg('先に動画を読み込んでください');return}
   const v=vidNow();if(!v){msg('動画が再生されていません');return}
