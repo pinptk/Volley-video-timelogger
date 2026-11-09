@@ -28,6 +28,9 @@ button:active{filter:brightness(1.4)}
 .ctypes input,.clist input{width:22px;height:22px;flex:none;margin:0}
 .clist{max-height:40vh;overflow:auto;border:1px solid #333;border-radius:8px;padding:0 6px;margin-bottom:6px}
 .clist .cset{color:#7fe;font-size:13px;font-weight:bold;padding:6px 4px;border-bottom:1px solid #333}
+.mapv{border:1px solid #444;border-radius:8px;padding:8px;margin:6px 0}
+.mapv label{display:flex;align-items:flex-start;gap:8px;padding:6px 2px;cursor:pointer}
+.mapv input{width:20px;height:20px;flex:none;margin:2px 0 0}
 .clist .vsub{display:block;font-size:12px;color:#999}
 .clist .ct{color:#aaa;min-width:3.5em}
 #mmemo{width:100%;margin:10px 0;background:#111;color:#eee;border:1px solid #555}
@@ -79,6 +82,7 @@ td input{width:100%;padding:4px;font-size:14px}
 <div id="mimp" class="modal"><div class="mbox">
 <div class="mt">CSV読み込み</div>
 <div id="ifile" class="note" style="margin:4px 0 8px"></div>
+<div id="imap"></div>
 <div id="itypes" class="ctypes"></div>
 <div class="note" style="margin-top:8px">今の記録に追加します。同じ記録、ほかの人が記録した同じサーブ（6秒以内）・セット切替（5分以内）は重複として取り込みません。注目スパイク・見返したいはメモが違えば別の記録として追加します。重複した記録のメモは今のメモにつなげます。</div>
 <div class="row" style="margin:10px 0 0"><button onclick="closeImp()" style="flex:1">キャンセル</button><button id="igo" onclick="doImp()" style="flex:1;background:#2a5;font-weight:bold"></button></div>
@@ -104,8 +108,8 @@ td input{width:100%;padding:4px;font-size:14px}
 <div id="plnav"><button onclick="ready&&P.previousVideo()">◀ 前の動画</button><button onclick="ready&&P.nextVideo()">次の動画 ▶</button></div>
 <div id="msg"></div>
 <div class="btns">
-<button class="sa" onclick="rec('サーブ','A')">サーブ <span id="la"></span></button>
-<button class="sb" onclick="rec('サーブ','B')">サーブ <span id="lb"></span></button>
+<button class="sa" onclick="serveBtn(0)">サーブ <span id="la"></span></button>
+<button class="sb" onclick="serveBtn(1)">サーブ <span id="lb"></span></button>
 <button class="sp" onclick="rec('注目スパイク')">注目スパイク</button>
 <button class="rv" onclick="askMemo()">見返したい</button>
 </div>
@@ -133,7 +137,7 @@ td input{width:100%;padding:4px;font-size:14px}
 <script>
 const $=id=>document.getElementById(id);
 let P=null,ready=false,L=[],seq=0,order={};
-let TT={},plIds=[],TN={},shownV='';
+let TT={},plIds=[],TN={},VW={},shownV='';
 let cur={list:'',v:''},wantV='',wantCue=false,pendingSeek=null,initSrc=null,initCue=true;
 const ERR={2:'URLの形式が正しくないかもしれません',5:'このブラウザでは再生できない動画です',100:'動画が見つかりません（非公開・削除の可能性）',101:'この動画は埋め込み再生が禁止されています',150:'この動画は埋め込み再生が禁止されています',153:'開き方の制限で再生できません（Webアドレスで開いてください）'};
 function msg(t){$('msg').textContent=t}
@@ -299,16 +303,28 @@ function copyText(text,ok,fail){
 /* ---------- 記録 ---------- */
 function fmt(t){t=Math.floor(t);const h=Math.floor(t/3600),m=Math.floor(t%3600/60),s=t%60;return(h?h+':'+String(m).padStart(2,'0'):m)+':'+String(s).padStart(2,'0')}
 /* ---------- チーム名（動画ごと） ----------
-   TN[動画ID]={a,b}。名前を書き換えたときか、最初に記録したときに、その動画の名前として保存する。
+   TN[動画ID]={a,b}: 記録の中のA・Bのチーム名。CSVにはこの名前で書き出す。
+   VW[動画ID]={a,b,flip}: ほかの人のCSVに合わせてA・Bや名前を変えた動画だけにある、自分用の表示名。
+     a・b は記録上のA・Bを自分が何と呼んでいるか。flip=true なら、左の入力欄・左のサーブボタンが記録上のBにあたる。
+   VW がない動画は、記録上の名前をそのまま表示し、左がA。
+   名前を書き換えたときか、最初に記録したときに、その動画の名前として保存する。
    まだ名前のない動画を開いたら、再生リストで手前にある一番近い動画の名前、なければ今の入力欄の名前を仮に出す */
 function inNames(){return{a:$('ta').value,b:$('tb').value}}
+function lside(v){return VW[v]&&VW[v].flip?'B':'A'}
+function oside(x){return x==='A'?'B':x==='B'?'A':x}
+function tnI(x,v){const n=TN[v]||inNames();return x==='A'?n.a:x==='B'?n.b:''}  // 記録上の名前
+function tn(x,v){const w=VW[v];if(w&&(x==='A'||x==='B'))return w[x.toLowerCase()];return tnI(x,v)}  // 表示用の名前
+function dispLR(v){const l=lside(v);return{a:tn(l,v),b:tn(oside(l),v)}}  // 左・右の表示名
+function vsText(v){const n=dispLR(v);return n.a+' vs '+n.b}
 function defNames(v){const k=cur.list?plIds.indexOf(v):-1;
-  for(let i=k-1;i>=0;i--)if(TN[plIds[i]])return TN[plIds[i]];
+  for(let i=k-1;i>=0;i--)if(TN[plIds[i]])return dispLR(plIds[i]);
   return inNames()}
-function namesOf(v){return TN[v]||inNames()}
 function syncNames(){const v=vidNow();if(!v||v===shownV)return;shownV=v;
-  const n=TN[v]||defNames(v);$('ta').value=n.a;$('tb').value=n.b;draw();updateURL()}
-function tn(x,v){const n=namesOf(v);return x==='A'?n.a:x==='B'?n.b:''}
+  const n=TN[v]?dispLR(v):defNames(v);$('ta').value=n.a;$('tb').value=n.b;draw();updateURL()}
+function namesFromInputs(v){const n=inNames();
+  if(VW[v]){const l=lside(v).toLowerCase();VW[v][l]=n.a;VW[v][l==='a'?'b':'a']=n.b}else TN[v]=n}
+/* サーブボタン: 0=左, 1=右。左右は表示の並び、記録はその動画の記録上のA・Bで */
+function serveBtn(k){const l=lside(vidNow());rec('サーブ',k?oside(l):l)}
 function sortL(){L.sort((a,b)=>(order[a.v]-order[b.v])||(a.t-b.t))}
 function addOrder(v,pi){if(!(v in order))order[v]=pi>=0?pi:1e6+Object.keys(order).length}
 /* 記録する時刻は、押した時刻から何秒前にするか（プレーが起きてから押すまでの遅れの分）。ブラウザに覚えておく */
@@ -386,7 +402,7 @@ function draw(){
   idx.forEach(i=>{const e=L[i],nw=e.n===last?' class="new"':'';
     if(flt&&e.type!=='セット開始'&&e.type!==flt)return;  // 絞り込み中もセットの区切りは残す
     if(e.type==='セット開始'){h+=`<tr class="set${e.n===last?' new':''}" data-t="${e.t}" onclick="seek(${i})"><td>${fmt(e.t)}</td><td colspan="5">第${C[i].s}セット 開始</td><td>${del(i)}</td></tr>`;return}
-    h+=`<tr${nw} data-t="${e.t}" onclick="seek(${i})"><td>${fmt(e.t)}</td><td>${C[i].s}-${C[i].r}</td><td class="sc">${C[i].a===''?'':C[i].a+'-'+C[i].b}</td><td>${esc(e.type)}</td><td>${esc(tn(e.side,e.v))}</td><td><input value="${esc(e.memo)}" onclick="event.stopPropagation()" oninput="L[${i}].memo=this.value;save()"></td><td>${del(i)}</td></tr>`});
+    h+=`<tr${nw} data-t="${e.t}" onclick="seek(${i})"><td>${fmt(e.t)}</td><td>${C[i].s}-${C[i].r}</td><td class="sc">${C[i].a===''?'':lside(vv)==='A'?C[i].a+'-'+C[i].b:C[i].b+'-'+C[i].a}</td><td>${esc(e.type)}</td><td>${esc(tn(e.side,e.v))}</td><td><input value="${esc(e.memo)}" onclick="event.stopPropagation()" oninput="L[${i}].memo=this.value;save()"></td><td>${del(i)}</td></tr>`});
   $('list').innerHTML=h;
   const cnt={};VL.forEach(e=>{if(e.type!=='セット開始')cnt[e.type]=(cnt[e.type]||0)+1});
   const all=VL.filter(e=>e.type!=='セット開始').length,shown=flt?cnt[flt]||0:all;
@@ -421,7 +437,7 @@ function seek(i){if(!ready)return;const e=L[i],st=e.t;
    時刻は記録した時刻そのまま */
 function showOut(text,note){$('csvtxt').value=text;$('outnote').textContent=note;$('out').style.display='block'}
 /* sel: コピーする記録の番号(n)。セットの見出しは、選んだ記録があるセットにだけ付ける */
-function commentText(v,sel){const C=calc(),out=[tn('A',v)+' vs '+tn('B',v)],st={};let ps=0,n=0;
+function commentText(v,sel){const C=calc(),out=[vsText(v)],st={};let ps=0,n=0;
   L.forEach((e,i)=>{if(e.v!==v)return;const s=C[i].s;
     if(e.type==='セット開始'){if(!(s in st))st[s]=e.t;return}
     if(!sel.has(e.n))return;
@@ -438,7 +454,7 @@ function copyComment(){if(!L.length){msg('まだ記録がありません');retur
   const vs=[...new Set(L.map(e=>e.v))];let v=vidNow();
   if(!vs.includes(v)){if(vs.length===1)v=vs[0];else{msg('この動画の記録がありません');return}}
   cV=v;const off=cOff();cSel=new Set(cRecs().filter(x=>x.e.type!=='セット開始'&&!off.includes(x.e.type)).map(x=>x.e.n));
-  cEach=false;$('cvid').textContent=(TT[v]||v)+'　'+tn('A',v)+' vs '+tn('B',v);
+  cEach=false;$('cvid').textContent=(TT[v]||v)+'　'+vsText(v);
   drawCopy();$('mcopy').classList.add('on')}
 function drawCopy(){const R=cRecs().filter(x=>x.e.type!=='セット開始'),C=calc(),types=[...new Set(R.map(x=>x.e.type))];
   $('ctypes').innerHTML=types.map((t,k)=>{const all=R.filter(x=>x.e.type===t),on=all.filter(x=>cSel.has(x.e.n)).length;
@@ -466,7 +482,7 @@ function doCopy(){const R=cRecs().filter(x=>x.e.type!=='セット開始');
 /* ---------- CSV ---------- */
 const COLS=['video_id','video_title','playlist_id','playlist_index','team_a','team_b','set','seconds','time','rally','score_a','score_b','type','serve_side','serve_team','memo','record_id'];
 function buildCSV(vs){const q=v=>'"'+String(v).replace(/"/g,'""')+'"';const C=calc();
-  const rows=[COLS].concat(L.map((e,i)=>({e,i})).filter(x=>vs.has(x.e.v)).map(({e,i})=>[e.v,e.title,e.list,e.pi>=0?e.pi+1:'',tn('A',e.v),tn('B',e.v),C[i].s,e.t,fmt(e.t),C[i].r,C[i].a,C[i].b,e.type,e.side,tn(e.side,e.v),e.memo,e.uid||'']));
+  const rows=[COLS].concat(L.map((e,i)=>({e,i})).filter(x=>vs.has(x.e.v)).map(({e,i})=>[e.v,e.title,e.list,e.pi>=0?e.pi+1:'',tnI('A',e.v),tnI('B',e.v),C[i].s,e.t,fmt(e.t),C[i].r,C[i].a,C[i].b,e.type,e.side,tnI(e.side,e.v),e.memo,e.uid||'']));
   return rows.map(r=>r.map(q).join(',')).join('\n')}
 /* 書き出す動画を選ぶ。初めは再生中の動画だけ選んだ状態。
    再生中の再生リストの動画を先に、ほかの動画（別の再生リストや単独の動画）をあとに並べる */
@@ -481,7 +497,7 @@ function drawExp(){const now=vidNow();let h='',sec='';
   eVids.forEach(v=>{const R=L.filter(e=>e.v===v),e0=R[0],n=R.filter(e=>e.type!=='セット開始').length;
     const g=v===now?'再生中の動画':cur.list&&R.some(e=>e.list===cur.list)?'この再生リストのほかの動画':'ほかの動画';
     if(g!==sec){h+=`<div class="cset">${g}</div>`;sec=g}
-    h+=`<label><input type="checkbox" data-v="${esc(v)}" ${eSel.has(v)?'checked':''}><span>${e0.pi>=0?(e0.pi+1)+'本目　':''}${esc(TT[v]||e0.title||v)}<span class="vsub">${esc(tn('A',v))} vs ${esc(tn('B',v))}・${n}件</span></span></label>`});
+    h+=`<label><input type="checkbox" data-v="${esc(v)}" ${eSel.has(v)?'checked':''}><span>${e0.pi>=0?(e0.pi+1)+'本目　':''}${esc(TT[v]||e0.title||v)}<span class="vsub">${esc(vsText(v))}・${n}件</span></span></label>`});
   const sc=$('evids').scrollTop;$('evids').innerHTML=h;$('evids').scrollTop=sc;
   $('evids').querySelectorAll('input').forEach(inp=>inp.onchange=()=>{inp.checked?eSel.add(inp.dataset.v):eSel.delete(inp.dataset.v);drawExp()});
   const n=L.filter(e=>eSel.has(e.v)&&e.type!=='セット開始').length;
@@ -511,14 +527,17 @@ function parseCSV(s){s=s.replace(/^﻿/,'');const rows=[];let r=[],f='',q=false;
    - セット切替: 同じ動画で5分以内 → 同じ
    - それ以外（注目スパイク・見返したい）: 1秒未満の差で、メモが同じか片方が空 → 同じ。メモが違えば別の記録として残す
    重複でも読み込む側にだけあるメモは「今のメモ / 読み込んだメモ」とつなげて残す。
-   チーム名は、まだ名前のない動画にだけ入れる */
+   チーム名は、まだ名前のない動画にはCSVの名前を入れる。
+   自分で名前を付けていてCSVと違う動画は、どちらがどちらにあたるかを選んでもらい、その動画は記録上の名前とA・BをCSVに合わせる
+   （A・Bが反対なら今までの記録のA・Bを入れ替える）。表示は自分の名前と左右の並びのまま（VW） */
 let imp=null;
 const TLABEL=t=>t==='セット開始'?'セット切替':t;
-function findDup(e){if(e.uid){const u=L.find(x=>x.uid===e.uid);if(u)return u}
-  return L.find(x=>{if(x.v!==e.v||x.type!==e.type)return false;const d=Math.abs(x.t-e.t);
-    if(e.type==='サーブ')return x.side===e.side&&d<6;
+/* sw: この動画のA・Bを入れ替えて取り込むとき true（今の記録のA・Bを入れ替えて比べる） */
+function findDup(e,sw){if(e.uid){const u=L.find(x=>x.uid===e.uid);if(u)return u}
+  return L.find(x=>{if(x.v!==e.v||x.type!==e.type)return false;const d=Math.abs(x.t-e.t),xs=sw?oside(x.side):x.side;
+    if(e.type==='サーブ')return xs===e.side&&d<6;
     if(e.type==='セット開始')return d<300;
-    if(d>=1||x.side!==e.side)return false;
+    if(d>=1||xs!==e.side)return false;
     const a=x.memo.trim(),b=e.memo.trim();return!a||!b||a===b})}
 function importCSV(inp){const file=inp.files[0];if(!file)return;const fr=new FileReader();
   fr.onload=()=>{inp.value='';try{
@@ -533,13 +552,25 @@ function importCSV(inp){const file=inp.files[0];if(!file)return;const fr=new Fil
       return{t:+g('seconds')||0,type:g('type'),side:g('serve_side'),memo:g('memo'),v:g('video_id'),pi,list:g('playlist_id'),title:g('video_title'),uid:g('record_id')}})
       .filter(e=>e.type&&e.v);
     if(!recs.length)throw 0;
-    recs.forEach(e=>e.dup=findDup(e));
-    imp={recs,nm,on:new Set(recs.map(e=>e.type))};
+    // 自分で付けた名前とCSVの名前が違う動画。どちらの向きが近いかを文字の重なりで推測しておく
+    const sim=(x,y)=>[...new Set(x)].filter(c=>y.includes(c)).length,map={};
+    Object.keys(nm).forEach(v=>{const o=nm[v];if(!TN[v]||!o.a||!o.b||(TN[v].a===o.a&&TN[v].b===o.b))return;
+      const dA=tn('A',v),dB=tn('B',v);map[v]=sim(dA,o.b)+sim(dB,o.a)>sim(dA,o.a)+sim(dB,o.b)});
+    imp={recs,nm,map,on:new Set(recs.map(e=>e.type))};
     const vs=new Set(recs.map(e=>e.v));
     $('ifile').textContent=file.name+'　（動画 '+vs.size+' 本・'+recs.length+' 件）';
     drawImp();$('mimp').classList.add('on')}catch(e){msg('このCSVは読み込めませんでした')}};
   fr.readAsText(file)}
-function drawImp(){const types=[...new Set(imp.recs.map(e=>e.type))];
+function drawImp(){const types=[...new Set(imp.recs.map(e=>e.type))],mv=Object.keys(imp.map);
+  imp.recs.forEach(e=>e.dup=findDup(e,!!imp.map[e.v]));
+  $('imap').innerHTML=mv.length?'<div class="mt" style="font-size:14px;margin-top:4px">チーム名の対応</div><div class="note">表示はあなたのチーム名のまま、記録はCSVのチーム名とA・Bに合わせます。</div>'+
+    mv.map((v,k)=>{const o=imp.nm[v],l=lside(v),my1=tn(l,v),my2=tn(oside(l),v),side1=l;  // 自分の左・右の名前
+      // 選択肢: 自分の左の名前がCSVのどちらにあたるか
+      const cs=x=>x==='A'?o.a:o.b,sw=imp.map[v],leftIs=sw?oside(side1):side1;
+      const opt=(val,lt)=>`<label><input type="radio" name="imap${k}" data-v="${esc(v)}" value="${val}" ${leftIs===lt?'checked':''}><span>あなたの「${esc(my1)}」＝CSVの「${esc(cs(lt))}」<br>あなたの「${esc(my2)}」＝CSVの「${esc(cs(oside(lt)))}」</span></label>`;
+      return`<div class="mapv"><div class="note">${esc(TT[v]||(imp.recs.find(e=>e.v===v)||{}).title||v)}</div>${opt(1,'A')}${opt(2,'B')}</div>`}).join(''):'';
+  $('imap').querySelectorAll('input').forEach(inp=>inp.onchange=()=>{const v=inp.dataset.v,lt=inp.value==='1'?'A':'B';
+    imp.map[v]=lt!==lside(v);drawImp()});
   $('itypes').innerHTML=types.map((t,k)=>{const all=imp.recs.filter(e=>e.type===t),dup=all.filter(e=>e.dup).length;
     return`<label><input type="checkbox" data-k="${k}" ${imp.on.has(t)?'checked':''}>${esc(TLABEL(t))}<span class="note">（追加 ${all.length-dup}件${dup?'・重複 '+dup+'件':''}）</span></label>`}).join('');
   $('itypes').querySelectorAll('input').forEach(inp=>inp.onchange=()=>{const t=types[+inp.dataset.k];inp.checked?imp.on.add(t):imp.on.delete(t);drawImp()});
@@ -550,6 +581,10 @@ function closeImp(){imp=null;$('mimp').classList.remove('on')}
 function doImp(){if(!imp)return;
   const add=imp.recs.filter(e=>imp.on.has(e.type)&&!e.dup),fills=memoFills(),d=inNames();
   fills.forEach(e=>{const a=e.dup.memo.trim(),b=e.memo.trim();e.dup.memo=a?a+' / '+b:b});
+  // チーム名の対応: 記録上の名前とA・BをCSVに合わせ、自分の表示名と左右の並びは VW に残す
+  Object.keys(imp.map).forEach(v=>{const sw=imp.map[v],o=imp.nm[v],dA=tn('A',v),dB=tn('B',v),fl=!!(VW[v]&&VW[v].flip);
+    if(sw){L.forEach(e=>{if(e.v===v)e.side=oside(e.side)});VW[v]={a:dB,b:dA,flip:!fl}}else VW[v]={a:dA,b:dB,flip:fl};
+    TN[v]={a:o.a,b:o.b}});
   add.forEach(e=>{if(!TN[e.v]){const o=imp.nm[e.v]||{};TN[e.v]={a:o.a||d.a,b:o.b||d.b}}
     addOrder(e.v,e.pi);if(e.title&&!TT[e.v])TT[e.v]=e.title;
     L.push({t:e.t,type:e.type,side:e.side,memo:e.memo,n:++seq,uid:e.uid||newUid(),v:e.v,pi:e.pi,list:e.list,title:e.title})});
@@ -566,16 +601,16 @@ function save(){if(!restored)return;let t=0,v=cur.v,st=-1;
   // まだ再生していない間は位置が0になるので、同じ動画なら前回の位置を残す
   if((st===-1||st===5||!t)&&lastSrc&&lastSrc.v===v&&lastSrc.list===cur.list)t=lastSrc.t||0;
   if(v||cur.list)lastSrc={v,list:cur.list,t};  // まだ何も開いていないときは前回の動画を残す
-  try{localStorage.setItem(SKEY,JSON.stringify({ver:1,L,TN,order,src:lastSrc}));saveOK=true}catch(e){saveOK=false}}
+  try{localStorage.setItem(SKEY,JSON.stringify({ver:1,L,TN,VW,order,src:lastSrc}));saveOK=true}catch(e){saveOK=false}}
 function restoreData(){let d=null;try{d=JSON.parse(localStorage.getItem(SKEY)||'null')}catch(e){}
   restored=true;if(!d||d.ver!==1)return null;
-  L=Array.isArray(d.L)?d.L:[];TN=d.TN||{};order=d.order||{};
+  L=Array.isArray(d.L)?d.L:[];TN=d.TN||{};VW=d.VW||{};order=d.order||{};
   seq=L.reduce((m,e)=>Math.max(m,e.n||0),0);L.forEach(e=>{if(!e.uid)e.uid=newUid()});L.forEach(e=>{if(e.title&&!TT[e.v])TT[e.v]=e.title});
   lastSrc=d.src||null;return d.src&&(d.src.v||d.src.list)?d.src:null}
 window.addEventListener('pagehide',save);
 document.addEventListener('visibilitychange',()=>{if(document.hidden)save()});
 window.addEventListener('beforeunload',e=>{if(L.length&&!saveOK){e.preventDefault();e.returnValue=''}});
-$('ta').oninput=$('tb').oninput=()=>{const v=vidNow();if(v){shownV=v;TN[v]=inNames()}draw();updateURL()};
+$('ta').oninput=$('tb').oninput=()=>{const v=vidNow();if(v){shownV=v;namesFromInputs(v)}draw();updateURL()};
 const last=restoreData();
 draw();
 /* URLに動画の指定があればそれを開く。同じ動画（再生リスト）なら前回見ていた位置から */
