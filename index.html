@@ -39,8 +39,11 @@ button:active{filter:brightness(1.4)}
 .mapv{border:1px solid #444;border-radius:8px;padding:8px;margin:6px 0}
 .mapv label{display:flex;align-items:flex-start;gap:8px;padding:6px 2px;cursor:pointer}
 .mapv input{width:20px;height:20px;flex:none;margin:2px 0 0}
-.hitem{display:block;width:100%;text-align:left;background:none;border-bottom:1px solid #333;border-radius:0;padding:10px 4px}
+.hrow{display:flex;align-items:center;gap:6px;border-bottom:1px solid #333}
+.hitem{display:block;flex:1;min-width:0;text-align:left;background:none;border-radius:0;padding:10px 4px}
 .hitem:active{background:#2a2a2a}
+.hitem .pl{display:block;font-size:12px;color:#9cf}
+.hdel{background:#500;padding:6px 12px;flex:none}
 .obtn{display:block;width:100%;text-align:left;background:#2a5;margin:6px 0;padding:10px 12px}
 .clist .vsub,.obtn .vsub{display:block;font-size:12px;color:#999}
 .clist .ct{color:#aaa;min-width:3.5em}
@@ -89,6 +92,12 @@ td input{width:100%;padding:4px;font-size:14px}
 <div class="note" style="margin:4px 0 8px">新しい順に最大100本まで。古いものは消えていることがあります（しばらく使わないと、ブラウザが保存データを消すことがあるため）。</div>
 <div id="hlist" class="clist" style="max-height:58vh"></div>
 <div class="row" style="margin:8px 0 0"><button onclick="closeHist()" style="flex:1">閉じる</button></div>
+</div></div>
+<div id="mhdel" class="modal" style="z-index:11"><div class="mbox">
+<div id="hdtxt" style="white-space:pre-line;margin-bottom:12px"></div>
+<button id="hdonly" onclick="closeHistDel('only')" style="width:100%;background:#733;margin-bottom:6px"></button>
+<button id="hdall" onclick="closeHistDel('all')" style="width:100%;background:#b33;font-weight:bold;margin-bottom:6px"></button>
+<button onclick="closeHistDel('')" style="width:100%">キャンセル</button>
 </div></div>
 <div id="mopen" class="modal"><div class="mbox">
 <div class="mt">別の動画の記録です</div>
@@ -259,20 +268,43 @@ function addHist(v,list,title){const h=getHist(),k=h.findIndex(x=>x.v===v);
   const old=k>=0?h.splice(k,1)[0]:null;
   h.unshift({v,list:list||(old&&old.list)||'',title:title||(old&&old.title)||TT[v]||'',at:Date.now()});
   try{localStorage.setItem(HKEY,JSON.stringify(h.slice(0,100)))}catch(e){}}
-function openHist(){const h=getHist(),p2=x=>String(x).padStart(2,'0');
+function openHist(keep){const h=getHist(),plt=getPLT(),p2=x=>String(x).padStart(2,'0'),sc=$('hlist').scrollTop;
   $('hlist').innerHTML=h.length?h.map((x,i)=>{const n=L.filter(e=>e.v===x.v&&e.type!=='セット開始').length,d=x.at?new Date(x.at):null;
-    const sub=[d?(d.getMonth()+1)+'/'+d.getDate()+' '+p2(d.getHours())+':'+p2(d.getMinutes()):'',x.list?'再生リスト':'',TN[x.v]?vsText(x.v):'',n?n+'件':''].filter(Boolean).join('・');
-    return`<button class="hitem" data-i="${i}"><span>${esc(x.title||TT[x.v]||x.v)}</span><span class="vsub">${esc(sub)}</span></button>`}).join(''):'<div class="note" style="padding:12px 4px">まだありません</div>';
+    const sub=[d?(d.getMonth()+1)+'/'+d.getDate()+' '+p2(d.getHours())+':'+p2(d.getMinutes()):'',TN[x.v]?vsText(x.v):'',n?n+'件':''].filter(Boolean).join('・');
+    const pl=x.list?'再生リスト：'+(plt[x.list]||'（名前を取得できていません）'):'';
+    return`<div class="hrow"><button class="hitem" data-i="${i}"><span>${esc(x.title||TT[x.v]||x.v)}</span>${pl?'<span class="pl">'+esc(pl)+'</span>':''}<span class="vsub">${esc(sub)}</span></button><button class="hdel" data-i="${i}" aria-label="一覧から消す">×</button></div>`}).join(''):'<div class="note" style="padding:12px 4px">まだありません</div>';
   $('hlist').querySelectorAll('.hitem').forEach(b=>b.onclick=()=>{const x=h[+b.dataset.i];closeHist();openVideo(x.v,x.list)});
-  $('hlist').scrollTop=0;$('mhist').classList.add('on')}
+  $('hlist').querySelectorAll('.hdel').forEach(b=>b.onclick=()=>askHistDel(h[+b.dataset.i]));
+  $('hlist').scrollTop=keep?sc:0;$('mhist').classList.add('on');
+  [...new Set(h.map(x=>x.list).filter(Boolean))].forEach(fetchPLT)}
+/* 見た動画を一覧から消す。記録がある動画は、記録も消すかどうかを選んでもらう */
+let histDel=null;
+function askHistDel(x){histDel=x;const n=L.filter(e=>e.v===x.v).length;
+  $('hdtxt').textContent='「'+(x.title||TT[x.v]||x.v)+'」を一覧から消しますか？'+(n?'\nこの動画には記録が '+n+' 件あります。':'');
+  $('hdonly').textContent=n?'一覧からだけ消す':'消す';$('hdall').style.display=n?'':'none';$('hdall').textContent='記録（'+n+'件）も一緒に消す';
+  $('mhdel').classList.add('on')}
+function closeHistDel(how){const x=histDel;histDel=null;$('mhdel').classList.remove('on');if(!x||!how)return;
+  const h=getHist().filter(y=>y.v!==x.v);try{localStorage.setItem(HKEY,JSON.stringify(h))}catch(e){}
+  if(how==='all'){const n=L.filter(e=>e.v===x.v).length;L=L.filter(e=>e.v!==x.v);draw();toast('一覧と記録（'+n+'件）を消しました')}else toast('一覧から消しました');
+  openHist(true)}
 function closeHist(){$('mhist').classList.remove('on')}
 /* 動画を開く（再生リストの中の動画なら再生リストごと）。前に見ていた位置から */
 function openVideo(v,list){openSrc({v,list:list||'',index:0,t:POS[v]||0},false)}
 
 /* ---------- 再生リストの動画一覧 ----------
    プレーヤーからは動画IDしか取れないので、タイトルは oEmbed で1本ずつ取りに行く */
+/* 再生リストの名前。プレーヤーからは取れないので oEmbed で取り、ブラウザに覚えておく（vt_plt） */
+const PLKEY='vt_plt';
+function getPLT(){try{return JSON.parse(localStorage.getItem(PLKEY)||'{}')||{}}catch(e){return{}}}
+let pltAsked={};
+async function fetchPLT(list){if(!list||pltAsked[list]||getPLT()[list])return;pltAsked[list]=1;
+  const t=await getTitleOf('https://www.youtube.com/playlist?list='+list);if(!t)return;
+  const m=getPLT();m[list]=t;const ks=Object.keys(m);if(ks.length>200)delete m[ks[0]];
+  try{localStorage.setItem(PLKEY,JSON.stringify(m))}catch(e){}
+  if($('mhist').classList.contains('on'))openHist()}
 function plSync(){const sel=$('plsel');
   if(!cur.list){if(plIds.length){plIds=[];sel.style.display='none'}return}
+  fetchPLT(cur.list);
   let pl=null,i=-1;try{pl=P.getPlaylist();i=P.getPlaylistIndex()}catch(e){}
   if(!pl||!pl.length)return;
   if(pl.join()!==plIds.join()){plIds=pl.slice();drawSel();fetchTitles(plIds)}
@@ -286,7 +318,8 @@ function drawSel(){if(!plIds.length)return;const sel=$('plsel'),cnt={};let i=-1;
 function selLater(){clearTimeout(selLater.h);selLater.h=setTimeout(drawSel,300)}
 function pick(i){if(!ready)return;wantV='';pendingSeek=null;P.playVideoAt(+i)}
 let OE=['https://www.youtube.com/oembed?format=json&url=','https://noembed.com/embed?url='],fetchGen=0;
-async function getTitle(v){const w=encodeURIComponent('https://www.youtube.com/watch?v='+v);
+async function getTitle(v){return getTitleOf('https://www.youtube.com/watch?v='+v)}
+async function getTitleOf(url){const w=encodeURIComponent(url);
   for(const u of OE.slice()){try{const r=await fetch(u+w);if(!r.ok)continue;const j=await r.json();if(j&&j.title)return j.title}
     catch(e){if(OE.length>1)OE=OE.filter(x=>x!==u)}}  // 通信自体が通らない取得先は以後使わない
   return''}
@@ -411,7 +444,7 @@ function closeMemo(ok){if(!pendRV)return;const p=pendRV;pendRV=null;
   resumePlay(p.resume)}
 $('mform').onsubmit=e=>{e.preventDefault();closeMemo(true)};
 document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;
-  if(pendRV)closeMemo(false);else if(pendUndo)closeUndo(false);else if($('mcopy').classList.contains('on'))closeCopy();else if(imp)closeImp();else if($('mexp').classList.contains('on'))closeExp();else if($('mhist').classList.contains('on'))closeHist();else if($('mopen').classList.contains('on'))closeOpen()});
+  if(pendRV)closeMemo(false);else if(pendUndo)closeUndo(false);else if($('mcopy').classList.contains('on'))closeCopy();else if(imp)closeImp();else if($('mexp').classList.contains('on'))closeExp();else if(histDel)closeHistDel('');else if($('mhist').classList.contains('on'))closeHist();else if($('mopen').classList.contains('on'))closeOpen()});
 /* 取り消す：最後に記録したものを、確認してから消す */
 let pendUndo=null;
 function recLabel(e,i){const C=calc();
