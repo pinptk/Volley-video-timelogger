@@ -28,6 +28,7 @@ button:active{filter:brightness(1.4)}
 .ctypes input,.clist input{width:22px;height:22px;flex:none;margin:0}
 .clist{max-height:40vh;overflow:auto;border:1px solid #333;border-radius:8px;padding:0 6px;margin-bottom:6px}
 .clist .cset{color:#7fe;font-size:13px;font-weight:bold;padding:6px 4px;border-bottom:1px solid #333}
+.clist .vsub{display:block;font-size:12px;color:#999}
 .clist .ct{color:#aaa;min-width:3.5em}
 #mmemo{width:100%;margin:10px 0;background:#111;color:#eee;border:1px solid #555}
 #plsel{display:none;width:100%;margin:6px 0 0;padding:10px 8px;font-size:16px;background:#222;color:#eee;border:1px solid #444;border-radius:8px}
@@ -66,6 +67,12 @@ td input{width:100%;padding:4px;font-size:14px}
 <div class="mt">この記録を取り消しますか？</div>
 <div id="undotxt" style="margin:12px 0;color:#ccc"></div>
 <div class="row" style="margin:0"><button onclick="closeUndo(false)" style="flex:1">キャンセル</button><button onclick="closeUndo(true)" style="flex:1;background:#b33;font-weight:bold">取り消す</button></div>
+</div></div>
+<div id="mexp" class="modal"><div class="mbox">
+<div class="mt">CSV書き出し</div>
+<div class="row" style="margin:8px 0"><button onclick="expPick(false)" style="flex:1;background:#333">再生中の動画だけ</button><button onclick="expPick(true)" style="flex:1;background:#333">すべて選ぶ</button></div>
+<div id="evids" class="clist"></div>
+<div class="row" style="margin:10px 0 0"><button onclick="closeExp()" style="flex:1">キャンセル</button><button id="ego" onclick="doExp()" style="flex:1;background:#2a5;font-weight:bold"></button></div>
 </div></div>
 <div id="mimp" class="modal"><div class="mbox">
 <div class="mt">CSV読み込み</div>
@@ -338,7 +345,7 @@ function closeMemo(ok){if(!pendRV)return;const p=pendRV;pendRV=null;
   resumePlay(p.resume)}
 $('mform').onsubmit=e=>{e.preventDefault();closeMemo(true)};
 document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;
-  if(pendRV)closeMemo(false);else if(pendUndo)closeUndo(false);else if($('mcopy').classList.contains('on'))closeCopy();else if(imp)closeImp()});
+  if(pendRV)closeMemo(false);else if(pendUndo)closeUndo(false);else if($('mcopy').classList.contains('on'))closeCopy();else if(imp)closeImp();else if($('mexp').classList.contains('on'))closeExp()});
 /* 取り消す：最後に記録したものを、確認してから消す */
 let pendUndo=null;
 function recLabel(e,i){const C=calc();
@@ -443,14 +450,35 @@ function doCopy(){const R=cRecs().filter(x=>x.e.type!=='セット開始');
 
 /* ---------- CSV ---------- */
 const COLS=['video_id','video_title','playlist_id','playlist_index','team_a','team_b','set','seconds','time','rally','score_a','score_b','type','serve_side','serve_team','memo'];
-function buildCSV(){const q=v=>'"'+String(v).replace(/"/g,'""')+'"';const C=calc();
-  const rows=[COLS].concat(L.map((e,i)=>[e.v,e.title,e.list,e.pi>=0?e.pi+1:'',tn('A',e.v),tn('B',e.v),C[i].s,e.t,fmt(e.t),C[i].r,C[i].a,C[i].b,e.type,e.side,tn(e.side,e.v),e.memo]));
+function buildCSV(vs){const q=v=>'"'+String(v).replace(/"/g,'""')+'"';const C=calc();
+  const rows=[COLS].concat(L.map((e,i)=>({e,i})).filter(x=>vs.has(x.e.v)).map(({e,i})=>[e.v,e.title,e.list,e.pi>=0?e.pi+1:'',tn('A',e.v),tn('B',e.v),C[i].s,e.t,fmt(e.t),C[i].r,C[i].a,C[i].b,e.type,e.side,tn(e.side,e.v),e.memo]));
   return rows.map(r=>r.map(q).join(',')).join('\n')}
-function exportCSV(){
-  if(!L.length){msg('まだ記録がありません');return}
-  const csv=buildCSV();showOut(csv,'ファイルが保存されない場合は、コピーしてメモアプリなどに貼り付けてください。');
-  const name='volley_tags_'+(cur.list||L[0].v||'video')+'.csv';
-  try{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv'}));
+/* 書き出す動画を選ぶ。初めは再生中の動画だけ選んだ状態。
+   再生中の再生リストの動画を先に、ほかの動画（別の再生リストや単独の動画）をあとに並べる */
+let eSel=new Set(),eVids=[];
+function exportCSV(){if(!L.length){msg('まだ記録がありません');return}
+  const now=vidNow(),seen=[...new Set(L.map(e=>e.v))];
+  const inList=v=>cur.list&&L.some(e=>e.v===v&&e.list===cur.list);
+  eVids=seen.sort((a,b)=>(b===now)-(a===now)||(inList(b)-inList(a))||(order[a]-order[b]));
+  eSel=new Set(eVids.includes(now)?[now]:eVids.length===1?eVids:[]);
+  drawExp();$('mexp').classList.add('on')}
+function drawExp(){const now=vidNow();let h='',sec='';
+  eVids.forEach(v=>{const R=L.filter(e=>e.v===v),e0=R[0],n=R.filter(e=>e.type!=='セット開始').length;
+    const g=v===now?'再生中の動画':cur.list&&R.some(e=>e.list===cur.list)?'この再生リストのほかの動画':'ほかの動画';
+    if(g!==sec){h+=`<div class="cset">${g}</div>`;sec=g}
+    h+=`<label><input type="checkbox" data-v="${esc(v)}" ${eSel.has(v)?'checked':''}><span>${e0.pi>=0?(e0.pi+1)+'本目　':''}${esc(TT[v]||e0.title||v)}<span class="vsub">${esc(tn('A',v))} vs ${esc(tn('B',v))}・${n}件</span></span></label>`});
+  const sc=$('evids').scrollTop;$('evids').innerHTML=h;$('evids').scrollTop=sc;
+  $('evids').querySelectorAll('input').forEach(inp=>inp.onchange=()=>{inp.checked?eSel.add(inp.dataset.v):eSel.delete(inp.dataset.v);drawExp()});
+  const n=L.filter(e=>eSel.has(e.v)&&e.type!=='セット開始').length;
+  $('ego').textContent='書き出す（'+eSel.size+'本・'+n+'件）';$('ego').disabled=!eSel.size;$('ego').style.opacity=eSel.size?1:.5}
+function expPick(all){eSel=new Set(all?eVids:eVids.filter(v=>v===vidNow()));drawExp()}
+function closeExp(){$('mexp').classList.remove('on')}
+function doExp(){if(!eSel.size)return;const csv=buildCSV(eSel);closeExp();
+  showOut(csv,'ファイルが保存されない場合は、コピーしてメモアプリなどに貼り付けてください。');
+  const one=[...eSel][0],d=new Date(),ymd=d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');
+  // 日本語のファイル名は端末によって無視されるので英数字にする
+  const name='volley_'+(eSel.size===1?one:eSel.size+'videos')+'_'+ymd+'.csv';
+  try{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv'}));
     a.download=name;document.body.appendChild(a);a.click();a.remove()}catch(e){}
 }
 function parseCSV(s){s=s.replace(/^﻿/,'');const rows=[];let r=[],f='',q=false;
