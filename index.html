@@ -25,7 +25,11 @@ button:active{filter:brightness(1.4)}
 #now{font-size:13px;color:#aaa;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #msg{color:#f99;font-size:13px;min-height:1.2em;margin:4px 0}
 .btns{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:6px 0}
-.btns button{padding:16px 6px;font-weight:bold;font-size:17px}
+.btns button{padding:16px 6px;font-weight:bold;font-size:17px;position:relative}
+.q{position:absolute;top:5px;right:6px;width:20px;height:20px;border-radius:50%;background:rgba(255,255,255,.28);font-size:13px;line-height:20px;text-align:center;font-weight:bold}
+.qtip{position:absolute;top:4px;right:30px;left:6px;display:none;background:#fff;color:#111;font-size:12px;font-weight:normal;line-height:1.4;padding:4px 6px;border-radius:6px;text-align:left;z-index:3}
+.qtip.on{display:block}
+.ncb{display:inline-block;font-size:11px;background:#666;color:#fff;border-radius:4px;padding:0 4px;margin-left:4px;white-space:nowrap;vertical-align:middle}
 .sa{background:#1e6fd9}.sb{background:#d93a1e}.sp{background:#c99200}.rv{background:#8e3ad9}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;align-items:flex-start;justify-content:center;padding:10vh 16px 0;z-index:10}
 .modal.on{display:flex}
@@ -140,8 +144,8 @@ td input{width:100%;padding:4px;font-size:14px}
 <div id="plnav"><button onclick="ready&&P.previousVideo()">◀ 前の動画</button><button onclick="ready&&P.nextVideo()">次の動画 ▶</button></div>
 <div id="msg"></div>
 <div class="btns">
-<button class="sa" onclick="serveBtn(0)">サーブ <span id="la"></span></button>
-<button class="sb" onclick="serveBtn(1)">サーブ <span id="lb"></span></button>
+<button class="sa" onclick="serveBtn(0)">サーブ <span id="la"></span><span class="q" onclick="qTip(event,this)">?</span><span class="qtip">ダブルタップで一つ前のラリーをノーカウントに</span></button>
+<button class="sb" onclick="serveBtn(1)">サーブ <span id="lb"></span><span class="q" onclick="qTip(event,this)">?</span><span class="qtip">ダブルタップで一つ前のラリーをノーカウントに</span></button>
 <button class="sp" onclick="rec('注目スパイク')">注目スパイク</button>
 <button class="rv" onclick="askMemo()">見返したい</button>
 </div>
@@ -403,7 +407,22 @@ function syncNames(){const v=vidNow();if(!v||v===shownV)return;shownV=v;
 function namesFromInputs(v){const n=inNames();
   if(VW[v]){const l=lside(v).toLowerCase();VW[v][l]=n.a;VW[v][l==='a'?'b':'a']=n.b}else TN[v]=n}
 /* サーブボタン: 0=左, 1=右。左右は表示の並び、記録はその動画の記録上のA・Bで */
-function serveBtn(k){const l=lside(vidNow());rec('サーブ',k?oside(l):l)}
+/* 同じサーブボタンを素早く2回押したら、1回目で付けたサーブに「前のラリーはノーカウント」の印を付ける
+   （2回目で新しいサーブは増やさない）。印の付いたサーブでは前のラリーの点をどちらにも足さない */
+let lastServe=null;
+function serveBtn(k){const now=Date.now(),v=vidNow();
+  if(lastServe&&lastServe.k===k&&lastServe.v===v&&now-lastServe.at<400){
+    const e=L.find(x=>x.n===lastServe.n);lastServe=null;
+    if(e){e.nc=true;draw();toast(fmt(e.t)+' サーブ（'+tn(e.side,e.v)+'）前のラリーはノーカウント');if(navigator.vibrate)navigator.vibrate([30,40,30])}
+    return}
+  const l=lside(v),before=seq;rec('サーブ',k?oside(l):l);
+  lastServe=seq!==before?{k,v,n:seq,at:now}:null}
+/* ？マーク：押すと横に説明を出す（ボタンの記録はしない） */
+function qTip(ev,el){ev.stopPropagation();const t=el.nextElementSibling,on=!t.classList.contains('on');
+  document.querySelectorAll('.qtip.on').forEach(x=>x.classList.remove('on'));
+  if(on){t.classList.add('on');clearTimeout(qTip.h);qTip.h=setTimeout(()=>t.classList.remove('on'),4000)}}
+document.addEventListener('click',e=>{if(!e.target.classList.contains('q'))document.querySelectorAll('.qtip.on').forEach(x=>x.classList.remove('on'))});
+const NCB='<span class="ncb">ノーカウント</span>';
 function sortL(){L.sort((a,b)=>(order[a.v]-order[b.v])||(a.t-b.t))}
 function addOrder(v,pi){if(!(v in order))order[v]=pi>=0?pi:1e6+Object.keys(order).length}
 /* 記録する時刻は、押した時刻から何秒前にするか（プレーが起きてから押すまでの遅れの分）。ブラウザに覚えておく */
@@ -449,7 +468,7 @@ document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;
 let pendUndo=null;
 function recLabel(e,i){const C=calc();
   if(e.type==='セット開始')return fmt(e.t)+'　第'+C[i].s+'セット開始';
-  return fmt(e.t)+'　'+e.type+(e.side?'（'+tn(e.side,e.v)+'）':'')+(e.memo.trim()?'　'+e.memo.trim():'')}
+  return fmt(e.t)+'　'+e.type+(e.side?'（'+tn(e.side,e.v)+'）':'')+(e.nc?'　前のラリーはノーカウント':'')+(e.memo.trim()?'　'+e.memo.trim():'')}
 function askUndo(){const vv=viewV();let k=-1;
   L.forEach((e,i)=>{if(e.v===vv&&(k<0||e.n>L[k].n))k=i});
   if(k<0){msg('この動画に取り消す記録がありません');return}
@@ -465,7 +484,7 @@ function closeUndo(ok){if(!pendUndo)return;const p=pendUndo;pendUndo=null;$('mun
 function calc(){let s=1,r=0,pv=null,served=false,a=0,b=0;
   return L.map(e=>{if(e.v!==pv){pv=e.v;s=1;r=0;served=false;a=b=0}
     if(e.type==='セット開始'){if(served){s++;r=0;served=false;a=b=0}return{s,r:'',a:'',b:''}}
-    if(e.type==='サーブ'){if(served){if(e.side==='A')a++;else if(e.side==='B')b++}r++;served=true}
+    if(e.type==='サーブ'){if(served&&!e.nc){if(e.side==='A')a++;else if(e.side==='B')b++}r++;served=true}
     return served?{s,r,a,b}:{s,r,a:'',b:''}})}
 let flt='';function setFlt(t){flt=t;draw()}
 let desc=true;try{desc=localStorage.getItem('vt_order')!=='asc'}catch(e){}
@@ -481,7 +500,7 @@ function draw(){
   idx.forEach(i=>{const e=L[i],nw=e.n===last?' class="new"':'';
     if(flt&&e.type!=='セット開始'&&e.type!==flt)return;  // 絞り込み中もセットの区切りは残す
     if(e.type==='セット開始'){h+=`<tr class="set${e.n===last?' new':''}" data-t="${e.t}" onclick="seek(${i})"><td>${fmt(e.t)}</td><td colspan="5">第${C[i].s}セット 開始</td><td>${del(i)}</td></tr>`;return}
-    h+=`<tr${nw} data-t="${e.t}" onclick="seek(${i})"><td>${fmt(e.t)}</td><td>${C[i].s}-${C[i].r}</td><td class="sc">${C[i].a===''?'':lside(vv)==='A'?C[i].a+'-'+C[i].b:C[i].b+'-'+C[i].a}</td><td>${esc(e.type)}</td><td>${esc(tn(e.side,e.v))}</td><td><input value="${esc(e.memo)}" onclick="event.stopPropagation()" oninput="L[${i}].memo=this.value;save()"></td><td>${del(i)}</td></tr>`});
+    h+=`<tr${nw} data-t="${e.t}" onclick="seek(${i})"><td>${fmt(e.t)}</td><td>${C[i].s}-${C[i].r}</td><td class="sc">${C[i].a===''?'':lside(vv)==='A'?C[i].a+'-'+C[i].b:C[i].b+'-'+C[i].a}</td><td>${esc(e.type)}${e.nc?NCB:''}</td><td>${esc(tn(e.side,e.v))}</td><td><input value="${esc(e.memo)}" onclick="event.stopPropagation()" oninput="L[${i}].memo=this.value;save()"></td><td>${del(i)}</td></tr>`});
   $('list').innerHTML=h;
   const cnt={};VL.forEach(e=>{if(e.type!=='セット開始')cnt[e.type]=(cnt[e.type]||0)+1});
   const all=VL.filter(e=>e.type!=='セット開始').length,shown=flt?cnt[flt]||0:all;
@@ -522,7 +541,7 @@ function commentText(v,sel){const C=calc(),out=[vsText(v)],st={};let ps=0,n=0;
     if(!sel.has(e.n))return;
     if(s!==ps){out.push('',s in st?fmt(st[s])+' ━━ 第'+s+'セット開始 ━━':'━━ 第'+s+'セット ━━');ps=s}
     const m=e.memo.trim();n++;
-    out.push(fmt(e.t)+' '+e.type+(e.side?'（'+tn(e.side,v)+'）':'')+(m?' - '+m:''))});
+    out.push(fmt(e.t)+' '+e.type+(e.side?'（'+tn(e.side,v)+'）':'')+(e.nc?' ※前のラリーはノーカウント':'')+(m?' - '+m:''))});
   return{text:out.join('\n'),n}}
 /* コピーする記録を選ぶ画面。種類でまとめて選べて、「一つずつ選ぶ」で記録ごとにも選べる。
    外した種類はブラウザに覚えておき、次に開いたときも外しておく */
@@ -544,7 +563,7 @@ function drawCopy(){const R=cRecs().filter(x=>x.e.type!=='セット開始'),C=ca
   $('ceach').textContent=cEach?'一つずつ選ぶ ▲':'一つずつ選ぶ ▼';$('clist').style.display=cEach?'block':'none';
   if(cEach){let h='',ps=0;
     cRecs().forEach(({e,i})=>{const s=C[i].s;if(s!==ps){h+=`<div class="cset">第${s}セット</div>`;ps=s}if(e.type==='セット開始')return;
-      h+=`<label><input type="checkbox" data-n="${e.n}" ${cSel.has(e.n)?'checked':''}><span class="ct">${fmt(e.t)}</span><span>${esc(e.type)}${e.side?'（'+esc(tn(e.side,e.v))+'）':''}${e.memo.trim()?' <span class="note">'+esc(e.memo.trim())+'</span>':''}</span></label>`});
+      h+=`<label><input type="checkbox" data-n="${e.n}" ${cSel.has(e.n)?'checked':''}><span class="ct">${fmt(e.t)}</span><span>${esc(e.type)}${e.side?'（'+esc(tn(e.side,e.v))+'）':''}${e.nc?NCB:''}${e.memo.trim()?' <span class="note">'+esc(e.memo.trim())+'</span>':''}</span></label>`});
     const sc=$('clist').scrollTop;$('clist').innerHTML=h;$('clist').scrollTop=sc;
     $('clist').querySelectorAll('input').forEach(inp=>inp.onchange=()=>{const n=+inp.dataset.n;inp.checked?cSel.add(n):cSel.delete(n);drawCopy()})}
   const n=R.filter(x=>cSel.has(x.e.n)).length;$('cgo').textContent='コピー（'+n+'件）';$('cgo').disabled=!n;$('cgo').style.opacity=n?1:.5}
@@ -559,9 +578,9 @@ function doCopy(){const R=cRecs().filter(x=>x.e.type!=='セット開始');
     ()=>showOut(r.text,'自動でコピーできませんでした。上の「コピー」を押すか、長押しで選択してコピーしてください。'))}
 
 /* ---------- CSV ---------- */
-const COLS=['video_id','video_title','playlist_id','playlist_index','team_a','team_b','set','seconds','time','rally','score_a','score_b','type','serve_side','serve_team','memo','record_id'];
+const COLS=['video_id','video_title','playlist_id','playlist_index','team_a','team_b','set','seconds','time','rally','score_a','score_b','type','serve_side','serve_team','memo','record_id','no_count'];
 function buildCSV(vs){const q=v=>'"'+String(v).replace(/"/g,'""')+'"';const C=calc();
-  const rows=[COLS].concat(L.map((e,i)=>({e,i})).filter(x=>vs.has(x.e.v)).map(({e,i})=>[e.v,e.title,e.list,e.pi>=0?e.pi+1:'',tnI('A',e.v),tnI('B',e.v),C[i].s,e.t,fmt(e.t),C[i].r,C[i].a,C[i].b,e.type,e.side,tnI(e.side,e.v),e.memo,e.uid||'']));
+  const rows=[COLS].concat(L.map((e,i)=>({e,i})).filter(x=>vs.has(x.e.v)).map(({e,i})=>[e.v,e.title,e.list,e.pi>=0?e.pi+1:'',tnI('A',e.v),tnI('B',e.v),C[i].s,e.t,fmt(e.t),C[i].r,C[i].a,C[i].b,e.type,e.side,tnI(e.side,e.v),e.memo,e.uid||'',e.nc?1:'']));
   return rows.map(r=>r.map(q).join(',')).join('\n')}
 /* 書き出す動画を選ぶ。初めは再生中の動画だけ選んだ状態。
    再生中の再生リストの動画を先に、ほかの動画（別の再生リストや単独の動画）をあとに並べる */
@@ -628,7 +647,7 @@ function importCSV(inp){const file=inp.files[0];if(!file)return;const fr=new Fil
       if(g('team_a'))o.a=g('team_a');if(g('team_b'))o.b=g('team_b');
       if((sd==='a'||sd==='b')&&!o[sd]&&g('serve_team'))o[sd]=g('serve_team');
       const pi=g('playlist_index')?(+g('playlist_index')-1):-1;
-      return{t:+g('seconds')||0,type:g('type'),side:g('serve_side'),memo:g('memo'),v:g('video_id'),pi,list:g('playlist_id'),title:g('video_title'),uid:g('record_id')}})
+      return{t:+g('seconds')||0,type:g('type'),side:g('serve_side'),memo:g('memo'),v:g('video_id'),pi,list:g('playlist_id'),title:g('video_title'),uid:g('record_id'),nc:g('no_count')==='1'}})
       .filter(e=>e.type&&e.v);
     if(!recs.length)throw 0;
     // 自分で付けた名前とCSVの名前が違う動画。どちらの向きが近いかを文字の重なりで推測しておく
@@ -660,13 +679,15 @@ function closeImp(){imp=null;$('mimp').classList.remove('on')}
 function doImp(){if(!imp)return;const fileV=[...new Set(imp.recs.map(e=>e.v))];
   const add=imp.recs.filter(e=>imp.on.has(e.type)&&!e.dup),fills=memoFills(),d=inNames();
   fills.forEach(e=>{const a=e.dup.memo.trim(),b=e.memo.trim();e.dup.memo=a?a+' / '+b:b});
+  // 同じサーブにファイル側だけノーカウントの印があれば、印を写す
+  imp.recs.forEach(e=>{if(imp.on.has(e.type)&&e.dup&&e.nc&&!e.dup.nc)e.dup.nc=true});
   // チーム名の対応: 記録上の名前とA・BをCSVに合わせ、自分の表示名と左右の並びは VW に残す
   Object.keys(imp.map).forEach(v=>{const sw=imp.map[v],o=imp.nm[v],dA=tn('A',v),dB=tn('B',v),fl=!!(VW[v]&&VW[v].flip);
     if(sw){L.forEach(e=>{if(e.v===v)e.side=oside(e.side)});VW[v]={a:dB,b:dA,flip:!fl}}else VW[v]={a:dA,b:dB,flip:fl};
     TN[v]={a:o.a,b:o.b}});
   add.forEach(e=>{if(!TN[e.v]){const o=imp.nm[e.v]||{};TN[e.v]={a:o.a||d.a,b:o.b||d.b}}
     addOrder(e.v,e.pi);if(e.title&&!TT[e.v])TT[e.v]=e.title;
-    L.push({t:e.t,type:e.type,side:e.side,memo:e.memo,n:++seq,uid:e.uid||newUid(),v:e.v,pi:e.pi,list:e.list,title:e.title})});
+    L.push({t:e.t,type:e.type,side:e.side,memo:e.memo,nc:e.nc||undefined,n:++seq,uid:e.uid||newUid(),v:e.v,pi:e.pi,list:e.list,title:e.title})});
   closeImp();sortL();shownV='';draw();
   syncNames();toast(add.length+'件追加しました'+(fills.length?'（メモ '+fills.length+'件）':''));
   const vv=viewV(),other=add.filter(e=>e.v!==vv),ov=new Set(other.map(e=>e.v)).size;
