@@ -132,11 +132,11 @@ td input{width:100%;padding:4px;font-size:14px}
 <div class="row" style="margin:8px 0 0"><button onclick="closeCopy()" style="flex:1">閉じる</button><button id="cgo" onclick="doCopy()" style="flex:1;background:#2a5;font-weight:bold"></button></div>
 </div></div>
 <div class="row">
-<input id="url" placeholder="YouTubeの動画・再生リストのURL" style="flex:1 1 220px"><button onclick="load()">読込</button><button onclick="openHist()" style="background:#345">見た動画</button>
+<input id="url" placeholder="YouTubeの動画・再生リストのURL" style="flex:1 1 150px;min-width:0"><button onclick="load()">読込</button><button onclick="openHist()" style="background:#345">見た動画</button>
 </div>
 <div class="row">
-<input id="ta" value="Aチーム" style="flex:1"><input id="tb" value="Bチーム" style="flex:1">
-<button onclick="copyLink()" style="background:#2a5">リンクをコピー</button>
+<input id="ta" value="Aチーム" style="flex:1 1 130px;min-width:0"><input id="tb" value="Bチーム" style="flex:1 1 130px;min-width:0"><span style="display:flex;gap:6px;flex:0 0 auto;margin-left:auto">
+<button onclick="copyLink()" style="background:#2a5">リンクをコピー</button><button onclick="clearAll()" style="background:#444">クリア</button></span>
 </div>
 <div id="wrap"><div id="player"></div><div id="ph">YouTubeの動画か再生リストのURLを入れて<br>「読込」を押してください</div><div id="tap"><div id="tapL" class="tapfx"></div><div id="tapS" class="tapfx">2倍速 ▶▶</div><div id="tapR" class="tapfx"></div></div></div>
 <div id="now"></div>
@@ -223,8 +223,9 @@ window.onYouTubeIframeAPIReady=function(){
   document.head.appendChild(s);
   setTimeout(()=>{if(!ready)msg('プレーヤーの準備に時間がかかっています…')},5000);})();
 
-function vidNow(){try{return P.getVideoData().video_id||''}catch(e){return''}}
-function openSrc(src,cue){if(!src)return;
+let cleared=false;  // 「クリア」したあと、次に動画を開くまで true（プレーヤーに残っている動画は無いものとして扱う）
+function vidNow(){if(cleared)return'';try{return P.getVideoData().video_id||''}catch(e){return''}}
+function openSrc(src,cue){if(!src)return;cleared=false;
   if(src.list!==cur.list){plIds=[];$('plsel').style.display='none'}
   cur={list:src.list,v:src.v};$('url').value=ytURL(src);$('ph').style.display='none';
   $('plnav').style.display=src.list?'grid':'none';
@@ -244,6 +245,7 @@ function openSrc(src,cue){if(!src)return;
 }
 function load(){const s=parseYT($('url').value);if(!s){msg('YouTubeの動画か再生リストのURLを入れてください');return}openSrc(s,false)}
 function onState(e){const s=e.data;
+  if(cleared){$('tap').classList.remove('on');return}
   $('tap').classList.toggle('on',s===1||s===2||s===3);
   if(wantV&&(s===1||s===3||s===5)){let pl=null;try{pl=P.getPlaylist()}catch(x){}
     if(pl&&pl.length){const idx=pl.indexOf(wantV);wantV='';
@@ -253,7 +255,7 @@ function onState(e){const s=e.data;
     if(pendingSeek.v==='*'||pendingSeek.v===id){const t=pendingSeek.t;pendingSeek=null;P.seekTo(t,true)}}
   showNow();updateURL();
 }
-function showNow(){if(!ready)return;let t='';
+function showNow(){if(!ready||cleared)return;let t='';
   try{const d=P.getVideoData(),pl=P.getPlaylist();
     if(d.video_id&&d.title&&TT[d.video_id]!==d.title){TT[d.video_id]=d.title;selLater()}
     if(cur.list&&pl&&pl.length)t=(P.getPlaylistIndex()+1)+' / '+pl.length+' 本目　';t+=d.title||''}catch(e){}
@@ -368,6 +370,18 @@ $('tap').addEventListener('click',ev=>{if(lpUsed){lpUsed=false;return}
     if(side==='C')togglePlay();else tapH=setTimeout(togglePlay,350)}
   tapSide=side;tapT=now});
 
+/* ---------- クリア ----------
+   動画を止めて、URL欄とチーム名を空で開いたときの状態に戻す。記録と見た動画の一覧はそのまま。
+   このタブで開いていた動画も忘れるので、読み込み直しても空のまま */
+function clearAll(){cleared=true;wantV='';pendingSeek=null;initSrc=null;lastServe=null;
+  try{P.stopVideo()}catch(e){}
+  cur={list:'',v:''};shownV='';plIds=[];
+  $('url').value='';$('ta').value='Aチーム';$('tb').value='Bチーム';
+  $('plsel').style.display='none';$('plnav').style.display='none';$('now').textContent='';
+  $('tap').classList.remove('on');$('ph').style.display='flex';
+  tabSrc=null;try{sessionStorage.removeItem(TKEY)}catch(e){}
+  msg('');draw();updateURL();toast('クリアしました')}
+
 /* ---------- 共有リンク ---------- */
 function shareQuery(){const p=new URLSearchParams();const v=vidNow()||cur.v;
   if(v)p.set('v',v);if(cur.list)p.set('list',cur.list);
@@ -432,7 +446,7 @@ $('lead').onchange=()=>{try{localStorage.setItem('vt_lead',$('lead').value)}catc
 /* 押した瞬間の動画・時刻を取る */
 function snap(){
   if(!ready||!P.getCurrentTime){msg('先に動画を読み込んでください');return null}
-  const v=vidNow();if(!v){msg('動画が再生されていません');return null}
+  const v=vidNow();if(!v){msg(cleared?'先に動画を読み込んでください':'動画が再生されていません');return null}
   syncNames();if(!TN[v])TN[v]=inNames();
   const t=+Math.max(0,P.getCurrentTime()-leadSec()).toFixed(2);let pi=-1,title='';
   try{title=P.getVideoData().title||'';if(cur.list)pi=P.getPlaylistIndex()}catch(e){}
