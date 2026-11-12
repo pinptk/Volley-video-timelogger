@@ -82,7 +82,8 @@ td input{width:100%;padding:4px;font-size:14px}
 .syncbtn{width:100%;padding:12px;background:#1d5f8a;font-weight:bold;margin:0 0 6px}
 .clist label.off{opacity:.6;cursor:default}
 .vbad{color:#f99!important}
-#sgin{flex:1;min-width:0;background:#111;color:#eee;border:1px solid #555}
+#sgin,#scfg{flex:1;min-width:0;background:#111;color:#eee;border:1px solid #555}
+#scfg{width:100%;height:96px;font-size:13px;margin:6px 0 0;font-family:monospace}
 </style></head><body>
 <div id="toast"></div>
 <div id="modal" class="modal"><form id="mform" class="mbox">
@@ -194,7 +195,6 @@ td input{width:100%;padding:4px;font-size:14px}
 </div>
 <div id="flt" class="chips"></div>
 <table><thead><tr><th>時刻</th><th>セット-R</th><th>点数</th><th>種類</th><th>サーブ</th><th>メモ</th><th></th></tr></thead><tbody id="list"></tbody></table>
-<script src="firebase-config.js"></script>
 <script>
 const $=id=>document.getElementById(id);
 let P=null,ready=false,L=[],seq=0,order={};
@@ -567,7 +567,7 @@ function isDel(v,uid){return!!(uid&&DEL[v]&&DEL[v].includes(uid))}
 function delNote(){return grp()&&hasCfg()?'\n同期すると、データベースとほかの人の端末からも消えます。':''}
 /* 消す前に確認する画面。出ている間は動画を一時停止し、閉じたら元が再生中なら再生に戻す */
 let pendConf=null;
-function askConf(text,ok,fn){pendConf={fn,resume:holdPlay()};$('cftxt').textContent=text;$('cfok').textContent=ok;$('mconf').classList.add('on')}
+function askConf(text,ok,fn,color){pendConf={fn,resume:holdPlay()};$('cftxt').textContent=text;$('cfok').textContent=ok;$('cfok').style.background=color||'#b33';$('mconf').classList.add('on')}
 function closeConf(ok){if(!pendConf)return;const p=pendConf;pendConf=null;$('mconf').classList.remove('on');if(ok)p.fn();resumePlay(p.resume)}
 function askDel(i){const e=L[i];if(!e)return;const uid=e.uid;
   askConf('この記録を消しますか？\n'+recLabel(e,i)+delNote(),'消す',()=>{if(dropRecs(x=>x.uid===uid)){draw();toast('消しました')}})}
@@ -775,7 +775,10 @@ function askOpen(vs){
 function closeOpen(){$('mopen').classList.remove('on')}
 
 /* ---------- データベース（Firestore）と同期 ----------
-   接続先は firebase-config.js の FIREBASE_CONFIG。別の Firebase に切り替えるときは、そのファイルだけ書き換える。
+   接続先（Firebase の接続情報）と合言葉は、このツールの中で設定してブラウザに覚えておく（vt_fb・vt_group）。
+   リポジトリやページには接続先を入れないので、ページを見つけただけの人はどのデータベースにもつながらない。
+   設定した人は「設定リンク」（#sync=… に接続先と合言葉を入れたリンク）を作ってチームの人に送れる。
+   受け取った人はそのリンクを開くと、確認のうえ同じ設定になる。別の Firebase に切り替えるときは、新しい設定リンクを送るだけ。
    データは groups/{合言葉}/videos/{動画ID} に動画ごとに1つ。同じ合言葉を入れた人どうしで共有する。
    同期は動画ごとに「データベースのを読む → この端末の記録とマージ → データベースに書き戻す」を
    トランザクションで行う（同時に同期しても、あとから書いた人が先の人の分を消さない）。
@@ -786,18 +789,42 @@ function closeOpen(){$('mopen').classList.remove('on')}
      （送ってしまうと、受け取る人がチーム名の対応を付けられないため）
    - データベースにすでにある動画は、データベースのチーム名とA・Bに合わせる（違えば「チーム名の対応」で選ぶ）
    - 選ばなかった種類の記録は、データベースのもこの端末のもそのまま */
-const GKEY='vt_group',FBV='10.14.1',TORD=['サーブ','注目スパイク','見返したい','セット開始'];
+const GKEY='vt_group',CKEY='vt_fb',FBV='10.14.1',TORD=['サーブ','注目スパイク','見返したい','セット開始'];
 let FB=null,sy=null,syGen=0;
 function grp(){try{return localStorage.getItem(GKEY)||''}catch(e){return''}}
 function okGrp(s){return/^[A-Za-z0-9_-]{8,40}$/.test(s)}
-function hasCfg(){const c=window.FIREBASE_CONFIG;return!!(c&&c.apiKey&&c.projectId)}
-async function fb(){if(FB)return FB;if(!hasCfg())throw new Error('nocfg');
+const CFK=['apiKey','authDomain','projectId','storageBucket','messagingSenderId','appId'];
+function okCfg(c){return!!(c&&typeof c.apiKey==='string'&&c.apiKey&&typeof c.projectId==='string'&&/^[a-z0-9-]{4,40}$/.test(c.projectId))}
+function cfg(){let c=null;try{c=JSON.parse(localStorage.getItem(CKEY)||'null')}catch(e){}return okCfg(c)?c:null}
+function hasCfg(){return!!cfg()}
+/* 貼り付けられた文字から接続先を読む。Firebase コンソールの firebaseConfig（apiKey: "…" の形）でも JSON でもよい */
+function parseCfg(t){const c={};String(t).replace(/["']?(\w+)["']?\s*:\s*["']([^"'\n]+)["']/g,(m,k,v)=>{if(CFK.includes(k))c[k]=v.trim()});return okCfg(c)?c:null}
+/* 設定リンク: <このページ>#sync=<接続先と合言葉の JSON を base64url にしたもの> */
+function setupLink(){const c=cfg(),G=grp();if(!c||!G)return'';const o={};CFK.forEach(k=>{if(c[k])o[k]=c[k]});
+  const b=btoa(JSON.stringify({c:o,g:G})).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+  return location.origin+location.pathname+'#sync='+b}
+function readSetup(t){const m=String(t).match(/[#&]sync=([\w-]+)/);if(!m)return null;
+  try{const o=JSON.parse(atob(m[1].replace(/-/g,'+').replace(/_/g,'/')));const c={};CFK.forEach(k=>{if(o.c&&typeof o.c[k]==='string')c[k]=o.c[k]});
+    return okCfg(c)&&okGrp(o.g)?{c,g:o.g}:null}catch(e){return null}}
+function saveSetup(c,g){try{localStorage.setItem(CKEY,JSON.stringify(c));if(g)localStorage.setItem(GKEY,g)}catch(e){}}
+/* ページを設定リンクで開いたとき。確認してから設定し、リンクの #sync=… は消す */
+function setupFromHash(){if(!/[#&]sync=/.test(location.hash))return;
+  const st=readSetup(location.hash);try{history.replaceState(null,'',location.pathname+location.search)}catch(e){}
+  // プレーヤーの準備ができたときにお知らせが消されるので、準備ができてから出す
+  if(!st){const t='設定リンクを読み取れませんでした（リンクが途中で切れていないか確認してください）',show=()=>ready?setTimeout(()=>msg(t),300):setTimeout(show,300);show();return}
+  const old=cfg(),same=old&&old.projectId===st.c.projectId&&grp()===st.g;
+  if(same){toast('この設定はもう入っています');return}
+  askConf('データベースの設定を取り込みますか？\n接続先：'+st.c.projectId+'\n合言葉：'+st.g+
+    (old?'\n\n今の設定（接続先：'+old.projectId+(grp()?'、合言葉：'+grp():'')+'）から切り替わります。':'')+
+    '\n\nチームの人から届いたリンクだけ取り込んでください。','設定する',()=>{saveSetup(st.c,st.g);toast('データベースの設定をしました')},'#2a5')}
+async function fb(){const c=cfg();if(!c)throw new Error('nocfg');const key=c.projectId+'/'+c.apiKey;if(FB&&FB.key===key)return FB;
   const b='https://www.gstatic.com/firebasejs/'+FBV+'/';
   const[a,f]=await Promise.all([import(b+'firebase-app.js'),import(b+'firebase-firestore.js')]);
-  FB={f,db:f.getFirestore(a.initializeApp(window.FIREBASE_CONFIG))};return FB}
+  const name='vt:'+key,app=a.getApps().find(x=>x.name===name)||a.initializeApp(c,name);
+  FB={key,f,db:f.getFirestore(app)};return FB}
 function within(p,ms){return Promise.race([p,new Promise((_,r)=>setTimeout(()=>r({code:'timeout'}),ms))])}
 function fbErr(e){const c=String(e&&(e.code||e.message)||e||'');
-  if(c==='nocfg')return'データベースの設定がまだありません（firebase-config.js）';
+  if(c==='nocfg')return'データベースの設定がまだありません';
   if(c==='timeout'||c.includes('unavailable')||c.includes('offline'))return'データベースにつながりませんでした（通信を確認してください）';
   if(c.includes('permission-denied'))return'データベースに断られました（合言葉か、Firebase のルールの設定を確認してください）';
   if(e instanceof TypeError)return'データベースの部品を読み込めませんでした（通信を確認してください）';
@@ -854,16 +881,27 @@ async function loadSync(){const g=sy.gen;sy.st='load';sy.err='';drawSync();
   catch(e){if(!sy||sy.gen!==g)return;sy.st='err';sy.err=fbErr(e)}
   drawSync()}
 function genGrp(){const c='abcdefghjkmnpqrstuvwxyz23456789',a=new Uint32Array(12);crypto.getRandomValues(a);$('sgin').value=[...a].map(x=>c[x%c.length]).join('')}
-function setGrp(){const s=$('sgin').value.trim();
-  if(!okGrp(s)){sy.err='合言葉は、英数字と - _ で8〜40文字にしてください';drawSync();return}
-  try{localStorage.setItem(GKEY,s)}catch(e){}sy.edit=false;sy.gen=++syGen;loadSync()}
+/* 設定の決定。貼り付け欄には設定リンクか接続情報を入れる（設定リンクなら合言葉もそこから） */
+function setGrp(){const t=$('scfg').value,st=readSetup(t);let c=st?st.c:parseCfg(t),g=st?st.g:$('sgin').value.trim();
+  sy.draft={t,g:$('sgin').value};  // エラーで描き直しても、入れたものを残す
+  if(!c){sy.err=t.trim()?'接続情報を読み取れませんでした。設定リンクか、Firebase の firebaseConfig（apiKey と projectId を含むもの）を貼り付けてください':'設定リンクか、Firebase の接続情報を貼り付けてください';drawSync();return}
+  if(!okGrp(g)){sy.err='合言葉は、英数字と - _ で8〜40文字にしてください';drawSync();return}
+  saveSetup(c,g);sy.edit=false;sy.draft=null;sy.gen=++syGen;loadSync()}
+function copySetup(){if(!isWeb()){sy.err='Webアドレスで開いていないので、設定リンクを作れません';drawSync();return}
+  copyText(setupLink(),'設定リンクをコピーしました',()=>showOut(setupLink(),'設定リンクです。コピーしてチームの人に送ってください。'))}
+function cfgText(c){return c?CFK.filter(k=>c[k]).map(k=>k+': "'+c[k]+'"').join('\n'):''}
 function syncPick(all){sy.sel=new Set(all?sy.vids.filter(v=>!syBlocked(v)):sy.vids.filter(v=>v===(vidNow()||cur.v)&&!syBlocked(v)));drawSync()}
 function drawSync(){if(!sy)return;const G=grp(),ready=sy.st==='ready',run=sy.st==='run';
   let gh='';
-  if(!hasCfg())gh='<div class="note vbad" style="margin-top:6px">データベースの設定がまだありません。firebase-config.js に Firebase の接続情報を入れてください（README の「データベースと同期」）。</div>';
-  else if(!G||sy.edit)gh=`<div class="note" style="margin-top:6px">同じ合言葉を入れた人どうしで記録を共有します。英数字と - _ で8〜40文字。「作る」で新しい合言葉を作れます。</div>
-<div class="row" style="margin:6px 0"><input id="sgin" value="${esc(G)}" placeholder="合言葉" autocomplete="off" autocapitalize="off" spellcheck="false"><button onclick="genGrp()" style="background:#333">作る</button><button onclick="setGrp()" style="background:#2a5">決定</button></div>`;
-  else gh=`<div class="row" style="align-items:center;margin:6px 0 4px"><span class="note" style="flex:1;min-width:0;overflow-wrap:anywhere">合言葉：<b style="color:#eee">${esc(G)}</b></span><button onclick="copyText(grp(),'合言葉をコピーしました')" style="background:#333;padding:6px 10px"${run?' disabled':''}>コピー</button><button onclick="sy.edit=true;drawSync()" style="background:#333;padding:6px 10px"${run?' disabled':''}>変更</button></div>`;
+  if(!hasCfg()||!G||sy.edit)gh=`<div class="note" style="margin-top:6px">チームの人から届いた<b>設定リンク</b>を開くか、ここに貼り付けてください。自分で Firebase を用意した人は、その接続情報（firebaseConfig）を貼り付けて、合言葉を決めてください。</div>
+<textarea id="scfg" placeholder="設定リンク、または apiKey: &quot;…&quot;, projectId: &quot;…&quot; などの接続情報" autocomplete="off" autocapitalize="off" spellcheck="false">${esc(sy.draft?sy.draft.t:cfgText(cfg()))}</textarea>
+<div class="note" style="margin-top:6px">合言葉（同じ合言葉の人どうしで記録を共有します。英数字と - _ で8〜40文字。設定リンクを貼ったときは入れなくてよい）</div>
+<div class="row" style="margin:4px 0 6px"><input id="sgin" value="${esc(sy.draft?sy.draft.g:G)}" placeholder="合言葉" autocomplete="off" autocapitalize="off" spellcheck="false"><button onclick="genGrp()" style="background:#333">作る</button></div>
+<div class="row" style="margin:0 0 4px">${hasCfg()&&G?'<button onclick="sy.edit=false;sy.err=\'\';sy.draft=null;drawSync()" style="flex:1;background:#333">やめる</button>':''}<button onclick="setGrp()" style="flex:1;background:#2a5;font-weight:bold">決定</button></div>
+<div class="note">合言葉を変えると、前の合言葉で同期した記録はデータベース上で見えなくなります（この端末の記録は残るので、新しい合言葉で同期すれば送られます）。</div>`;
+  else gh=`<div class="note" style="margin-top:6px;overflow-wrap:anywhere">接続先：<b style="color:#eee">${esc(cfg().projectId)}</b>　合言葉：<b style="color:#eee">${esc(G)}</b></div>
+<div class="row" style="margin:6px 0 2px"><button onclick="copySetup()" style="flex:1;background:#345"${run?' disabled':''}>設定リンクをコピー</button><button onclick="sy.edit=true;sy.err='';sy.draft=null;drawSync()" style="background:#333"${run?' disabled':''}>変更</button></div>
+<div class="note">設定リンクをチームの人に送ると、開くだけで同じ設定になります。合言葉が入っているので、チームの外には送らないでください。</div>`;
   $('sgrp').innerHTML=gh;
   $('sstat').className='note'+(sy.err?' vbad':'');
   $('sstat').textContent=sy.err||(sy.st==='load'?'データベースを読み込み中…':run?'同期中…':ready&&!sy.vids.length?'この端末にもデータベースにも、まだ記録がありません':'');
@@ -976,6 +1014,8 @@ restoreData();
 draw();
 /* URLに動画の指定があればそれを開く。なければ、このタブで開いていた動画（読み込み直したとき）。
    どちらもなければ空のまま。同じ動画なら前に見ていた位置から */
+setupFromHash();
+window.addEventListener('hashchange',setupFromHash);  // 開いているページに設定リンクを貼ったとき
 let first=fromPage();
 if(!first&&tabSrc&&(tabSrc.v||tabSrc.list))first={v:tabSrc.v||'',list:tabSrc.list||'',index:0,t:0};
 if(first&&!first.t){if(!first.v&&first.list&&tabSrc&&tabSrc.list===first.list)first.v=tabSrc.v||'';if(first.v&&POS[first.v])first.t=POS[first.v]}
