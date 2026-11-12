@@ -57,6 +57,8 @@ button:active{filter:brightness(1.4)}
 .tools button{padding:12px 4px}
 #plnav{display:none;grid-template-columns:1fr 1fr;gap:6px;margin:6px 0}
 #plnav button{padding:8px;background:#333}
+#plnav label{grid-column:1/3;display:flex;align-items:center;gap:8px;font-size:13px;color:#ccc;padding:2px 2px 0}
+#plnav input{width:20px;height:20px;margin:0}
 #toast{position:fixed;left:50%;top:12px;transform:translateX(-50%);background:#0a0;color:#fff;padding:8px 16px;border-radius:20px;font-weight:bold;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9;white-space:nowrap}
 table{width:100%;border-collapse:collapse;font-size:14px;margin-top:6px}
 td,th{border-bottom:1px solid #333;padding:5px 3px;text-align:left}
@@ -215,6 +217,7 @@ td input{width:100%;padding:4px;font-size:14px}
 <li>左側をダブルタップで10秒戻す、右側をダブルタップで10秒進める（続けてタップするとさらに10秒ずつ）</li>
 <li>1回タップで再生・一時停止、長押ししている間は2倍速</li>
 <li>読み込んだ直後は、最初の1回だけプレーヤーの再生ボタンを押してください</li>
+<li>再生リストでは、動画が終わっても次の動画には進まず、終わりで止まります。進ませたいときは、動画の下の「動画が終わったら次の動画に進む」にチェックを入れてください</li>
 </ul>
 <h4>記録の表</h4>
 <ul>
@@ -296,7 +299,7 @@ td input{width:100%;padding:4px;font-size:14px}
 <div id="wrap"><div id="player"></div><div id="ph">YouTubeの動画か再生リストのURLを入れて<br>「読込」を押してください<br><span style="font-size:13px;color:#777">使い方は右上の「設定」にあります</span></div><div id="tap"><div id="tapL" class="tapfx"></div><div id="tapS" class="tapfx">2倍速 ▶▶</div><div id="tapR" class="tapfx"></div></div></div>
 <div id="now"></div>
 <select id="plsel" onchange="pick(this.value)"></select>
-<div id="plnav"><button onclick="ready&&P.previousVideo()">◀ 前の動画</button><button onclick="ready&&P.nextVideo()">次の動画 ▶</button></div>
+<div id="plnav"><button onclick="plStep(-1)">◀ 前の動画</button><button onclick="plStep(1)">次の動画 ▶</button><label><input type="checkbox" id="autonext" onchange="setAutoNext(this.checked)">動画が終わったら次の動画に進む</label></div>
 <div id="msg"></div>
 <div class="btns">
 <button class="sa" onclick="serveBtn(0)">サーブ <span id="la"></span><span class="q" onclick="qTip(event,this)">?</span><span class="qtip">ダブルタップで一つ前のラリーをノーカウントに</span></button>
@@ -381,7 +384,7 @@ window.onYouTubeIframeAPIReady=function(){
 
 let cleared=false;  // 「クリア」したあと、次に動画を開くまで true（プレーヤーに残っている動画は無いものとして扱う）
 function vidNow(){if(cleared)return'';try{return P.getVideoData().video_id||''}catch(e){return''}}
-function openSrc(src,cue){if(!src)return;cleared=false;
+function openSrc(src,cue){if(!src)return;cleared=false;userNav();
   if(src.list!==cur.list){plIds=[];$('plsel').style.display='none'}
   cur={list:src.list,v:src.v};$('url').value=ytURL(src);$('ph').style.display='none';
   $('plnav').style.display=src.list?'grid':'none';
@@ -406,11 +409,43 @@ function onState(e){const s=e.data;
   if(wantV&&(s===1||s===3||s===5)){let pl=null;try{pl=P.getPlaylist()}catch(x){}
     if(pl&&pl.length){const idx=pl.indexOf(wantV);wantV='';
       if(idx>=0&&idx!==P.getPlaylistIndex()){
-        wantCue?P.cuePlaylist({list:cur.list,listType:'playlist',index:idx}):P.playVideoAt(idx);return}}}
+        userNav();wantCue?P.cuePlaylist({list:cur.list,listType:'playlist',index:idx}):P.playVideoAt(idx);return}}}
   if(pendingSeek&&s===1){const id=vidNow();
     if(pendingSeek.v==='*'||pendingSeek.v===id){const t=pendingSeek.t;pendingSeek=null;P.seekTo(t,true)}}
+  if(s===0&&endW.v&&vidNow()===endW.v)endW={...endW,ended:true};  // 終わった（このあと次の動画に進むことがある）
+  if(stayOnEnd())return;
   showNow();updateURL();
 }
+/* ---------- 再生リストで次の動画に自動で進まないようにする ----------
+   埋め込みプレーヤーには止める設定がないので、動画が終わる直前で一時停止する。
+   それでも次の動画に進んでしまったら（画面が裏にあって止めるのが間に合わなかったときなど）、前の動画の終わりに戻す。
+   自分で動画を移ったとき（ボタン・選択欄・記録の行・読込など、3秒以内）は戻さない。
+   プレーヤーの中の操作で移ったときも、前の動画の終わり3秒より前なら戻さない。
+   「動画が終わったら次の動画に進む」にチェックを入れると、今までどおり進む（ブラウザが覚える） */
+/* endW: 最後に見たときの動画・何本目・再生位置・長さ・見た時刻(at)・状態(s)・速さ(r)・終わったか(ended) */
+const END0={v:'',i:-1,t:0,d:0,at:0,s:-1,r:1,ended:false};
+let autoNext=false,navAt=0,endW=END0;
+try{autoNext=localStorage.getItem('vt_autonext')==='1'}catch(e){}
+$('autonext').checked=autoNext;
+function setAutoNext(on){autoNext=on;try{localStorage.setItem('vt_autonext',on?'1':'0')}catch(e){}}
+function userNav(){navAt=Date.now()}
+function plStep(k){if(!ready)return;userNav();k<0?P.previousVideo():P.nextVideo()}
+/* いま見ている動画が、自分で移ったのではなく次の動画に進んだものなら、前の動画の終わりに戻す。戻したら true */
+function stayOnEnd(){
+  if(autoNext||!cur.list||!endW.v||Date.now()-navAt<3000)return false;
+  const v=vidNow();if(!v||v===endW.v||!(endW.d>0)||endW.i<0)return false;
+  // 前の動画が終わりまで来ていたか。画面が裏にあると見張りの間隔が空くので、再生中だったなら経った時間の分だけ進めて見積もる
+  const w=endW,pos=w.t+(w.s===1?(Date.now()-w.at)/1000*w.r:0);
+  if(!w.ended&&w.d-pos>3)return false;
+  endW=END0;wantV='';pendingSeek=null;  // 戻したあとにまた進んでも戻せるよう、自分で移った扱いにはしない
+  try{P.cuePlaylist({list:cur.list,listType:'playlist',index:w.i,startSeconds:Math.max(0,w.d-1)})}catch(e){return false}
+  toast('次の動画には進まないようにしています');return true}
+setInterval(()=>{if(!ready||cleared||!cur.list)return;let s,t,d,r,v,i;
+  try{s=P.getPlayerState();t=P.getCurrentTime();d=P.getDuration();r=P.getPlaybackRate()||1;v=vidNow();i=P.getPlaylistIndex()}catch(e){return}
+  if(!v||!(d>0))return;
+  if(v!==endW.v&&stayOnEnd())return;  // 次の動画に変わったのを、ここで先に見つけたとき
+  if(s===1||s===2||s===3)endW={v,i,t,d,at:Date.now(),s,r,ended:false};
+  if(!autoNext&&s===1&&d-t<0.35+0.25*r)try{P.pauseVideo()}catch(e){}},200);
 function showNow(){if(!ready||cleared)return;let t='';
   try{const d=P.getVideoData(),pl=P.getPlaylist();
     if(d.video_id&&d.title&&TT[d.video_id]!==d.title){TT[d.video_id]=d.title;selLater()}
@@ -514,7 +549,7 @@ function drawSel(){if(!plIds.length)return;const sel=$('plsel'),cnt={};let i=-1;
     return`<option value="${k}">${k+1}. ${esc(t)}${cnt[v]?'　［'+cnt[v]+'件］':''}</option>`}).join('');
   sel.value=String(i>=0?i:0);sel.style.display='block'}
 function selLater(){clearTimeout(selLater.h);selLater.h=setTimeout(drawSel,300)}
-function pick(i){if(!ready)return;wantV='';pendingSeek=null;P.playVideoAt(+i)}
+function pick(i){if(!ready)return;userNav();wantV='';pendingSeek=null;P.playVideoAt(+i)}
 let OE=['https://www.youtube.com/oembed?format=json&url=','https://noembed.com/embed?url='],fetchGen=0;
 async function getTitle(v){return getTitleOf('https://www.youtube.com/watch?v='+v)}
 async function getTitleOf(url){const w=encodeURIComponent(url);
@@ -738,7 +773,7 @@ function askConf(text,ok,fn,color){pendConf={fn,resume:holdPlay()};$('cftxt').te
 function closeConf(ok){if(!pendConf)return;const p=pendConf;pendConf=null;$('mconf').classList.remove('on');if(ok)p.fn();resumePlay(p.resume)}
 function askDel(i){const e=L[i];if(!e)return;const uid=e.uid;
   askConf('この記録を消しますか？\n'+recLabel(e,i)+delNote(),'消す',()=>{if(dropRecs(x=>x.uid===uid)){draw();toast('消しました')}})}
-function seek(i){if(!ready)return;const e=L[i],st=e.t;
+function seek(i){if(!ready)return;userNav();const e=L[i],st=e.t;
   if(vidNow()===e.v){P.seekTo(st,true);return}
   if(e.list){let idx=e.pi;
     try{const pl=P.getPlaylist();if(cur.list===e.list&&pl){const k=pl.indexOf(e.v);if(k>=0)idx=k}}catch(x){}
