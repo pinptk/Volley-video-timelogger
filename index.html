@@ -60,7 +60,16 @@ button:active{filter:brightness(1.4)}
 #splay label{align-items:flex-start}#splay input{margin-top:2px}
 .ctypes .vsub{display:block;font-size:12px;color:#999;line-height:1.5}
 #toast{position:fixed;left:50%;top:12px;transform:translateX(-50%);background:#0a0;color:#fff;padding:8px 16px;border-radius:20px;font-weight:bold;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9;white-space:nowrap}
-table{width:100%;border-collapse:collapse;font-size:14px;margin-top:6px}
+html,body{height:100vh;height:100dvh}
+body{display:flex;flex-direction:column}
+body>*{flex-shrink:0}
+#tblwrap{flex:1 1 auto;min-height:220px;overflow:auto;-webkit-overflow-scrolling:touch;margin-top:6px;border-top:1px solid #333}
+thead th{position:sticky;top:0;background:#111;z-index:1;box-shadow:0 1px 0 #333}
+#fold{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:6px 0 0}
+#fold button{background:#2a2a2a;text-align:left;font-size:14px;padding:7px 10px;color:#ccc}
+#fold .arr{display:inline-block;width:1.2em;color:#9cf}
+.folded{display:none!important}
+table{width:100%;border-collapse:collapse;font-size:14px}
 td,th{border-bottom:1px solid #333;padding:5px 3px;text-align:left}
 th{white-space:nowrap}
 tbody tr{cursor:pointer}
@@ -72,9 +81,10 @@ tr.new td:first-child{box-shadow:inset 4px 0 #fc0}
 tr.cur td:first-child{box-shadow:inset 4px 0 #39f}
 tr.new.cur td:first-child{box-shadow:inset 4px 0 #fc0,inset 8px 0 #39f}
 td.sc{white-space:nowrap;font-weight:bold}
+td.ty{word-break:keep-all}
 tr.set td{background:#123d3b;color:#7fe;font-weight:bold}
 .setbtn{width:100%;padding:12px;background:#0b7a75;font-weight:bold;margin:0 0 6px}
-td textarea{display:block;width:100%;min-width:6em;padding:4px 6px;font-size:14px;line-height:1.4;font-family:inherit;resize:none;overflow:hidden;background:#fff;color:#000}
+td textarea{display:block;width:100%;min-width:4em;padding:4px 6px;font-size:14px;line-height:1.4;font-family:inherit;resize:none;overflow:hidden;background:#fff;color:#000}
 .del{background:#500;padding:4px 10px}
 #out{display:none;margin-top:8px}
 #out textarea{width:100%;height:140px;font-size:12px;background:#222;color:#eee}
@@ -227,8 +237,11 @@ td textarea{display:block;width:100%;min-width:6em;padding:4px 6px;font-size:14p
 <li>読み込んだ直後は、最初の1回だけプレーヤーの再生ボタンを押してください</li>
 <li>再生リストでは、動画が終わっても次の動画には進まず、終わりで止まります。進ませたいときは、「動画プレーヤーの設定」で「再生リストの自動再生」をオンにしてください</li>
 </ul>
+<h4>ボタンを隠す</h4>
+<p>動画の下の「▼ サーブなど」「▼ 取り消しなど」で、記録用のボタンを隠せます（もう一度押すと出ます）。「サーブなど」を隠すと、取り消しなどのボタンと記録する時刻も一緒に隠れます。「取り消しなど」はそちらだけ隠れます。隠した分だけ記録の表が広がります。</p>
 <h4>記録の表</h4>
 <ul>
+<li>表は画面の下まで広がり、中をスクロールできる（見出しの行は上に残る）</li>
 <li>行をタップすると、その場面から再生する</li>
 <li>メモ欄に書き込める。「×」で消す（確認が出る）</li>
 <li>上のボタンで種類ごとに絞り込める。「新しい順／古い順」で並びを変えられる</li>
@@ -315,7 +328,9 @@ td textarea{display:block;width:100%;min-width:6em;padding:4px 6px;font-size:14p
 <div id="now"></div>
 <select id="plsel" onchange="pick(this.value)"></select>
 <div id="plnav"><button onclick="plStep(-1)">◀ 前の動画</button><button onclick="plStep(1)">次の動画 ▶</button></div>
+<div id="fold"><button id="fold1" onclick="toggleFold(1)" aria-expanded="true"><span class="arr">▼</span>サーブなど</button><button id="fold2" onclick="toggleFold(2)" aria-expanded="true"><span class="arr">▼</span>取り消しなど</button></div>
 <div id="msg"></div>
+<div id="grp1">
 <div class="btns">
 <button class="sa" onclick="serveBtn(0)">サーブ <span id="la"></span><span class="q" onclick="qTip(event,this)">?</span><span class="qtip">ダブルタップで一つ前のラリーをノーカウントに</span></button>
 <button class="sb" onclick="serveBtn(1)">サーブ <span id="lb"></span><span class="q" onclick="qTip(event,this)">?</span><span class="qtip">ダブルタップで一つ前のラリーをノーカウントに</span></button>
@@ -323,6 +338,8 @@ td textarea{display:block;width:100%;min-width:6em;padding:4px 6px;font-size:14p
 <button class="rv" onclick="askMemo()">見返したい</button>
 </div>
 <button class="setbtn" onclick="rec('セット開始')">セット切替（ここから次のセット）</button>
+</div>
+<div id="grp2">
 <div class="tools">
 <button onclick="askUndo()">取り消す</button>
 <button onclick="copyComment()" style="background:#2a5">コメント欄用にコピー</button>
@@ -330,6 +347,7 @@ td textarea{display:block;width:100%;min-width:6em;padding:4px 6px;font-size:14p
 <button class="syncbtn" onclick="openSync()">データベースと同期</button>
 </div>
 <label class="lead">記録する時刻：ボタンを押した<select id="lead"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option></select>秒前</label>
+</div>
 <input type="file" id="file" accept=".csv,text/csv,text/plain" style="display:none" onchange="importCSV(this)">
 <div id="out">
 <div class="row"><button onclick="copyText($('csvtxt').value,'コピーしました')">コピー</button><button onclick="$('out').style.display='none'">閉じる</button></div>
@@ -342,7 +360,7 @@ td textarea{display:block;width:100%;min-width:6em;padding:4px 6px;font-size:14p
 <button onclick="clearVideo()" style="background:#400;padding:6px 12px">この動画の記録を消去</button></span>
 </div>
 <div id="flt" class="chips"></div>
-<table><thead><tr><th>時刻</th><th>点数</th><th>種類</th><th>サーブ</th><th>メモ</th><th></th></tr></thead><tbody id="list"></tbody></table>
+<div id="tblwrap"><table><thead><tr><th>時刻</th><th>点数</th><th>種類</th><th>サーブ</th><th>メモ</th><th></th></tr></thead><tbody id="list"></tbody></table></div>
 <script>
 const $=id=>document.getElementById(id);
 let P=null,ready=false,L=[],seq=0,order={};
@@ -761,7 +779,7 @@ function draw(){
   idx.forEach(i=>{const e=L[i],nw=e.n===last?' class="new"':'';
     if(flt&&e.type!=='セット開始'&&e.type!==flt)return;  // 絞り込み中もセットの区切りは残す
     if(e.type==='セット開始'){h+=`<tr class="set${e.n===last?' new':''}" data-t="${e.t}" onclick="seek(${i})"><td>${fmt(e.t)}</td><td colspan="4">第${C[i].s}セット 開始</td><td>${del(i)}</td></tr>`;return}
-    h+=`<tr${nw} data-t="${e.t}" onclick="seek(${i})"><td>${fmt(e.t)}</td><td class="sc">${C[i].a===''?'':lside(vv)==='A'?C[i].a+'-'+C[i].b:C[i].b+'-'+C[i].a}</td><td>${esc(e.type)}${e.nc?NCB:''}</td><td>${esc(tn(e.side,e.v))}</td><td style="width:45%"><textarea rows="1" onclick="event.stopPropagation()" onkeydown="memoKey(event,this)" oninput="memoIn(${i},this)">${esc(e.memo)}</textarea></td><td>${del(i)}</td></tr>`});
+    h+=`<tr${nw} data-t="${e.t}" onclick="seek(${i})"><td>${fmt(e.t)}</td><td class="sc">${C[i].a===''?'':lside(vv)==='A'?C[i].a+'-'+C[i].b:C[i].b+'-'+C[i].a}</td><td class="ty">${esc(e.type)}${e.nc?NCB:''}</td><td>${esc(tn(e.side,e.v))}</td><td style="width:45%"><textarea rows="1" onclick="event.stopPropagation()" onkeydown="memoKey(event,this)" oninput="memoIn(${i},this)">${esc(e.memo)}</textarea></td><td>${del(i)}</td></tr>`});
   $('list').innerHTML=h;$('list').querySelectorAll('textarea').forEach(fitMemo);
   const cnt={};VL.forEach(e=>{if(e.type!=='セット開始')cnt[e.type]=(cnt[e.type]||0)+1});
   const all=VL.filter(e=>e.type!=='セット開始').length,shown=flt?cnt[flt]||0:all;
@@ -772,6 +790,17 @@ function draw(){
   $('sortbtn').textContent=desc?'新しい順 ▼':'古い順 ▲';
   drawSel();save();markCur(true);
 }
+/* ---------- 記録用のボタンを隠す ----------
+   1: サーブ・注目スパイク・見返したい・セット切替（grp1）。隠すと、下の取り消しなど（grp2）も一緒に隠す。出すと両方出す
+   2: 取り消す・コメント欄用にコピー・記録ファイル読み書き・データベースと同期・記録する時刻（grp2）だけ
+   出ているときは ▼、隠しているときは ▶。状態はブラウザが覚える。隠した分だけ下の記録の表が広がる */
+let fold={a:true,b:true};
+try{const x=JSON.parse(localStorage.getItem('vt_fold')||'null');if(x)fold={a:x.a!==false,b:x.b!==false}}catch(e){}
+function toggleFold(k){if(k===1){fold.a=!fold.a;fold.b=fold.a}else fold.b=!fold.b;
+  try{localStorage.setItem('vt_fold',JSON.stringify(fold))}catch(e){}drawFold()}
+function drawFold(){$('grp1').classList.toggle('folded',!fold.a);$('grp2').classList.toggle('folded',!fold.b);
+  [['fold1',fold.a],['fold2',fold.b]].forEach(([id,on])=>{const b=$(id);b.querySelector('.arr').textContent=on?'▼':'▶';b.setAttribute('aria-expanded',on)})}
+drawFold();
 /* 表のメモ欄。入りきらないときは折り返して、欄の高さを中身に合わせる。
    メモは1行の文として扱う（コメント欄用コピーの行が崩れないよう、改行は入れない。Enter で入力を終える） */
 function fitMemo(t){t.style.height='auto';t.style.height=t.scrollHeight+'px'}
