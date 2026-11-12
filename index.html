@@ -57,8 +57,8 @@ button:active{filter:brightness(1.4)}
 .tools button{padding:12px 4px}
 #plnav{display:none;grid-template-columns:1fr 1fr;gap:6px;margin:6px 0}
 #plnav button{padding:8px;background:#333}
-#plnav label{grid-column:1/3;display:flex;align-items:center;gap:8px;font-size:13px;color:#ccc;padding:2px 2px 0}
-#plnav input{width:20px;height:20px;margin:0}
+#splay label{align-items:flex-start}#splay input{margin-top:2px}
+.ctypes .vsub{display:block;font-size:12px;color:#999;line-height:1.5}
 #toast{position:fixed;left:50%;top:12px;transform:translateX(-50%);background:#0a0;color:#fff;padding:8px 16px;border-radius:20px;font-weight:bold;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9;white-space:nowrap}
 table{width:100%;border-collapse:collapse;font-size:14px;margin-top:6px}
 td,th{border-bottom:1px solid #333;padding:5px 3px;text-align:left}
@@ -147,6 +147,13 @@ td input{width:100%;padding:4px;font-size:14px}
 <div id="mset" class="modal"><div class="mbox">
 <div class="shead"><div class="mt" style="font-size:18px">設定</div><button onclick="closeSet()">閉じる</button></div>
 
+<details class="sec" id="splay"><summary>動画プレーヤーの設定</summary><div class="ctypes">
+<label><input type="checkbox" id="autonext" onchange="setAutoNext(this.checked)"><span>再生リストの自動再生<span class="vsub">動画が終わったら、再生リストの次の動画に進む。オフのときは終わりで止まる</span></span></label>
+<label><input type="checkbox" id="optdt" onchange="setOpt('dt',this.checked)"><span>ダブルタップで10秒スキップ<span class="vsub">動画の左側・右側をダブルタップして10秒戻す・進める。オフのときは、1回タップの再生・一時停止がすぐ効く</span></span></label>
+<label><input type="checkbox" id="optlp" onchange="setOpt('lp',this.checked)"><span>長押しで2倍速<span class="vsub">動画を長押ししている間だけ2倍速にする</span></span></label>
+<div class="note" style="padding:8px 2px 0">設定はこのブラウザが覚えます。</div>
+</div></details>
+
 <details class="sec" id="sdb"><summary>データベース</summary><div id="setdb"></div></details>
 
 <details class="sec" id="sprep" ontoggle="if(this.open)loadRules()"><summary>データベースの用意のしかた</summary><div class="help">
@@ -216,8 +223,9 @@ td input{width:100%;padding:4px;font-size:14px}
 <ul>
 <li>左側をダブルタップで10秒戻す、右側をダブルタップで10秒進める（続けてタップするとさらに10秒ずつ）</li>
 <li>1回タップで再生・一時停止、長押ししている間は2倍速</li>
+<li>ダブルタップのスキップと長押しの2倍速は、「動画プレーヤーの設定」でオフにできます</li>
 <li>読み込んだ直後は、最初の1回だけプレーヤーの再生ボタンを押してください</li>
-<li>再生リストでは、動画が終わっても次の動画には進まず、終わりで止まります。進ませたいときは、動画の下の「動画が終わったら次の動画に進む」にチェックを入れてください</li>
+<li>再生リストでは、動画が終わっても次の動画には進まず、終わりで止まります。進ませたいときは、「動画プレーヤーの設定」で「再生リストの自動再生」をオンにしてください</li>
 </ul>
 <h4>記録の表</h4>
 <ul>
@@ -299,7 +307,7 @@ td input{width:100%;padding:4px;font-size:14px}
 <div id="wrap"><div id="player"></div><div id="ph">YouTubeの動画か再生リストのURLを入れて<br>「読込」を押してください<br><span style="font-size:13px;color:#777">使い方は右上の「設定」にあります</span></div><div id="tap"><div id="tapL" class="tapfx"></div><div id="tapS" class="tapfx">2倍速 ▶▶</div><div id="tapR" class="tapfx"></div></div></div>
 <div id="now"></div>
 <select id="plsel" onchange="pick(this.value)"></select>
-<div id="plnav"><button onclick="plStep(-1)">◀ 前の動画</button><button onclick="plStep(1)">次の動画 ▶</button><label><input type="checkbox" id="autonext" onchange="setAutoNext(this.checked)">動画が終わったら次の動画に進む</label></div>
+<div id="plnav"><button onclick="plStep(-1)">◀ 前の動画</button><button onclick="plStep(1)">次の動画 ▶</button></div>
 <div id="msg"></div>
 <div class="btns">
 <button class="sa" onclick="serveBtn(0)">サーブ <span id="la"></span><span class="q" onclick="qTip(event,this)">?</span><span class="qtip">ダブルタップで一つ前のラリーをノーカウントに</span></button>
@@ -421,7 +429,7 @@ function onState(e){const s=e.data;
    それでも次の動画に進んでしまったら（画面が裏にあって止めるのが間に合わなかったときなど）、前の動画の終わりに戻す。
    自分で動画を移ったとき（ボタン・選択欄・記録の行・読込など、3秒以内）は戻さない。
    プレーヤーの中の操作で移ったときも、前の動画の終わり3秒より前なら戻さない。
-   「動画が終わったら次の動画に進む」にチェックを入れると、今までどおり進む（ブラウザが覚える） */
+   設定画面の「再生リストの自動再生」をオンにすると、今までどおり進む（ブラウザが覚える） */
 /* endW: 最後に見たときの動画・何本目・再生位置・長さ・見た時刻(at)・状態(s)・速さ(r)・終わったか(ended) */
 const END0={v:'',i:-1,t:0,d:0,at:0,s:-1,r:1,ended:false};
 let autoNext=false,navAt=0,endW=END0;
@@ -568,10 +576,16 @@ function fetchTitles(ids){const g=++fetchGen,q=ids.filter(v=>TT[v]===undefined);
    下の操作バー（シークバー・全画面など）は覆わない。
    最初の再生はプレーヤー自体をタップしないと始まらない端末があるので、再生が始まるまでは層を出さない */
 let tapT=0,tapSide='',tapN=0,tapH=null,skipTo=0;
+/* 設定画面の「動画プレーヤーの設定」。optDT: ダブルタップで10秒スキップ、optLP: 長押しで2倍速（どちらも初めはオン。ブラウザが覚える） */
+let optDT=true,optLP=true;
+try{optDT=localStorage.getItem('vt_dtap')!=='0';optLP=localStorage.getItem('vt_lpress')!=='0'}catch(e){}
+$('optdt').checked=optDT;$('optlp').checked=optLP;
+function setOpt(k,on){if(k==='dt')optDT=on;else{optLP=on;if(!on)lpEnd()}
+  try{localStorage.setItem(k==='dt'?'vt_dtap':'vt_lpress',on?'1':'0')}catch(e){}}
 /* 長押し2倍速。押して0.5秒たったら2倍速にし、指を離したら元の速さに戻す */
 let lpH=null,lpOn=false,lpUsed=false,lpRate=1,lpX=0,lpY=0;
 function lpEnd(){clearTimeout(lpH);lpH=null;if(!lpOn)return;lpOn=false;$('tapS').style.opacity=0;try{P.setPlaybackRate(lpRate)}catch(e){}}
-$('tap').addEventListener('pointerdown',ev=>{lpUsed=false;lpX=ev.clientX;lpY=ev.clientY;clearTimeout(lpH);
+$('tap').addEventListener('pointerdown',ev=>{lpUsed=false;lpX=ev.clientX;lpY=ev.clientY;clearTimeout(lpH);if(!optLP)return;
   lpH=setTimeout(()=>{lpUsed=true;tapSide='';clearTimeout(tapH);  // 長押しはタップとして扱わない
     let s=-1;try{s=P.getPlayerState()}catch(e){}if(s!==1&&s!==3)return;
     try{lpRate=P.getPlaybackRate()||1}catch(e){lpRate=1}
@@ -588,13 +602,13 @@ function togglePlay(){if(!ready)return;let s=-1;try{s=P.getPlayerState()}catch(e
 $('tap').addEventListener('click',ev=>{if(lpUsed){lpUsed=false;return}
   const r=$('tap').getBoundingClientRect(),x=(ev.clientX-r.left)/r.width,now=Date.now();
   const side=x<.4?'L':x>.6?'R':'C';
-  if(side!=='C'&&side===tapSide&&now-tapT<350){clearTimeout(tapH);tapN++;
+  if(optDT&&side!=='C'&&side===tapSide&&now-tapT<350){clearTimeout(tapH);tapN++;
     let base=skipTo;if(tapN===1)try{base=P.getCurrentTime()}catch(e){}
     let dur=0;try{dur=P.getDuration()}catch(e){}
     skipTo=Math.max(0,base+(side==='L'?-10:10));if(dur)skipTo=Math.min(skipTo,dur-1);
     P.seekTo(skipTo,true);tapFx('tap'+side,side==='L'?'◀◀ '+tapN*10+'秒':tapN*10+'秒 ▶▶');
   }else{tapN=0;clearTimeout(tapH);
-    if(side==='C')togglePlay();else tapH=setTimeout(togglePlay,350)}
+    if(side==='C'||!optDT)togglePlay();else tapH=setTimeout(togglePlay,350)}  // ダブルタップを使わないなら待たずに
   tapSide=side;tapT=now});
 
 /* ---------- クリア ----------
