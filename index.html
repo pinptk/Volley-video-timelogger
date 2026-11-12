@@ -54,7 +54,7 @@ button:active{filter:brightness(1.4)}
 #mmemo{width:100%;margin:10px 0;background:#111;color:#eee;border:1px solid #555}
 #plsel{display:none;width:100%;margin:6px 0 0;padding:10px 8px;font-size:16px;background:#222;color:#eee;border:1px solid #444;border-radius:8px}
 .tools{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:6px 0}
-.tools button{padding:12px 4px}
+.tools button{padding:12px 4px;font-size:15px}
 #plnav{display:none;grid-template-columns:1fr 1fr;gap:6px;margin:6px 0}
 #plnav button{padding:8px;background:#333}
 #splay label{align-items:flex-start}#splay input{margin-top:2px}
@@ -74,7 +74,7 @@ tr.new.cur td:first-child{box-shadow:inset 4px 0 #fc0,inset 8px 0 #39f}
 td.sc{white-space:nowrap;font-weight:bold}
 tr.set td{background:#123d3b;color:#7fe;font-weight:bold}
 .setbtn{width:100%;padding:12px;background:#0b7a75;font-weight:bold;margin:0 0 6px}
-td input{width:100%;padding:4px;font-size:14px}
+td textarea{display:block;width:100%;min-width:6em;padding:4px 6px;font-size:14px;line-height:1.4;font-family:inherit;resize:none;overflow:hidden;background:#fff;color:#000}
 .del{background:#500;padding:4px 10px}
 #out{display:none;margin-top:8px}
 #out textarea{width:100%;height:140px;font-size:12px;background:#222;color:#eee}
@@ -237,7 +237,7 @@ td input{width:100%;padding:4px;font-size:14px}
 </ul>
 <h4>セット・点数</h4>
 <ul>
-<li>「セット-R」は「セット番号-ラリー番号」。サーブを記録するたびにラリー番号が進む</li>
+<li>セットは表の「第◯セット 開始」の行で区切られる。サーブを記録するたびにラリー番号が進む（記録ファイルの <code>rally</code> 列）</li>
 <li>「点数」はそのラリーが始まる時点の点数。セットの2本目以降のサーブは、サーブしたチームの1点として数える</li>
 <li>サーブを記録し忘れると、そこから点数がずれる</li>
 </ul>
@@ -342,7 +342,7 @@ td input{width:100%;padding:4px;font-size:14px}
 <button onclick="clearVideo()" style="background:#400;padding:6px 12px">この動画の記録を消去</button></span>
 </div>
 <div id="flt" class="chips"></div>
-<table><thead><tr><th>時刻</th><th>セット-R</th><th>点数</th><th>種類</th><th>サーブ</th><th>メモ</th><th></th></tr></thead><tbody id="list"></tbody></table>
+<table><thead><tr><th>時刻</th><th>点数</th><th>種類</th><th>サーブ</th><th>メモ</th><th></th></tr></thead><tbody id="list"></tbody></table>
 <script>
 const $=id=>document.getElementById(id);
 let P=null,ready=false,L=[],seq=0,order={};
@@ -760,9 +760,9 @@ function draw(){
   const idx=L.map((e,i)=>i).filter(i=>L[i].v===vv);if(desc)idx.reverse();
   idx.forEach(i=>{const e=L[i],nw=e.n===last?' class="new"':'';
     if(flt&&e.type!=='セット開始'&&e.type!==flt)return;  // 絞り込み中もセットの区切りは残す
-    if(e.type==='セット開始'){h+=`<tr class="set${e.n===last?' new':''}" data-t="${e.t}" onclick="seek(${i})"><td>${fmt(e.t)}</td><td colspan="5">第${C[i].s}セット 開始</td><td>${del(i)}</td></tr>`;return}
-    h+=`<tr${nw} data-t="${e.t}" onclick="seek(${i})"><td>${fmt(e.t)}</td><td>${C[i].s}-${C[i].r}</td><td class="sc">${C[i].a===''?'':lside(vv)==='A'?C[i].a+'-'+C[i].b:C[i].b+'-'+C[i].a}</td><td>${esc(e.type)}${e.nc?NCB:''}</td><td>${esc(tn(e.side,e.v))}</td><td><input value="${esc(e.memo)}" onclick="event.stopPropagation()" oninput="L[${i}].memo=this.value;L[${i}].u=Date.now();save()"></td><td>${del(i)}</td></tr>`});
-  $('list').innerHTML=h;
+    if(e.type==='セット開始'){h+=`<tr class="set${e.n===last?' new':''}" data-t="${e.t}" onclick="seek(${i})"><td>${fmt(e.t)}</td><td colspan="4">第${C[i].s}セット 開始</td><td>${del(i)}</td></tr>`;return}
+    h+=`<tr${nw} data-t="${e.t}" onclick="seek(${i})"><td>${fmt(e.t)}</td><td class="sc">${C[i].a===''?'':lside(vv)==='A'?C[i].a+'-'+C[i].b:C[i].b+'-'+C[i].a}</td><td>${esc(e.type)}${e.nc?NCB:''}</td><td>${esc(tn(e.side,e.v))}</td><td style="width:45%"><textarea rows="1" onclick="event.stopPropagation()" onkeydown="memoKey(event,this)" oninput="memoIn(${i},this)">${esc(e.memo)}</textarea></td><td>${del(i)}</td></tr>`});
+  $('list').innerHTML=h;$('list').querySelectorAll('textarea').forEach(fitMemo);
   const cnt={};VL.forEach(e=>{if(e.type!=='セット開始')cnt[e.type]=(cnt[e.type]||0)+1});
   const all=VL.filter(e=>e.type!=='セット開始').length,shown=flt?cnt[flt]||0:all;
   $('count').textContent=all?(flt?flt+' '+shown+'件 / この動画 '+all+'件':'この動画 '+all+'件'):'';
@@ -772,6 +772,13 @@ function draw(){
   $('sortbtn').textContent=desc?'新しい順 ▼':'古い順 ▲';
   drawSel();save();markCur(true);
 }
+/* 表のメモ欄。入りきらないときは折り返して、欄の高さを中身に合わせる。
+   メモは1行の文として扱う（コメント欄用コピーの行が崩れないよう、改行は入れない。Enter で入力を終える） */
+function fitMemo(t){t.style.height='auto';t.style.height=t.scrollHeight+'px'}
+function memoKey(ev,t){if(ev.key==='Enter'&&!ev.isComposing){ev.preventDefault();t.blur()}}
+function memoIn(i,t){if(/[\r\n]/.test(t.value))t.value=t.value.replace(/[\r\n]+/g,' ');
+  L[i].memo=t.value;L[i].u=Date.now();save();fitMemo(t)}
+window.addEventListener('resize',()=>$('list').querySelectorAll('textarea').forEach(fitMemo));
 /* 再生位置のすぐ前の記録（表に出ている行のうち、時刻が今の再生位置以下で一番遅いもの）に青い線を付ける */
 let curRow=null;
 function markCur(force){if(!ready)return;let now=-1;try{now=P.getCurrentTime()}catch(e){}
