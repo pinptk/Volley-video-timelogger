@@ -10,7 +10,7 @@
 <meta name="twitter:card" content="summary">
 <style>
 *{box-sizing:border-box}
-body{font-family:-apple-system,sans-serif;margin:0;padding:10px;background:#111;color:#eee;-webkit-text-size-adjust:100%}
+body{font-family:-apple-system,sans-serif;margin:0;padding:10px 10px 0;background:#111;color:#eee;-webkit-text-size-adjust:100%}
 input,button,textarea{font-size:16px;padding:8px;border-radius:8px;border:none}
 button{color:#fff;background:#555;touch-action:manipulation}
 #ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:16px;background:#0b0b0b;color:#999;font-size:15px;line-height:1.7;z-index:2}
@@ -60,10 +60,12 @@ button:active{filter:brightness(1.4)}
 #splay label{align-items:flex-start}#splay input{margin-top:2px}
 .ctypes .vsub{display:block;font-size:12px;color:#999;line-height:1.5}
 #toast{position:fixed;left:50%;top:12px;transform:translateX(-50%);background:#0a0;color:#fff;padding:8px 16px;border-radius:20px;font-weight:bold;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9;white-space:nowrap}
-html,body{height:100vh;height:100dvh}
-body{display:flex;flex-direction:column}
-body>*{flex-shrink:0}
-#tblwrap{flex:1 1 auto;min-height:200px;overflow:auto;-webkit-overflow-scrolling:touch;margin-top:6px;border-top:1px solid #333}
+/* 記録の欄（並び順の行・絞り込み・表）は画面の高さちょうど。並び順の行の上端を画面のいちばん上までスクロールすると
+   （ページのいちばん下までスクロールした状態）、表が画面の下まで埋まる。表は中だけスクロールし、見出しの行は上に残る */
+#recs{height:100vh;height:100dvh;display:flex;flex-direction:column;margin-top:8px}
+#recs>*{flex-shrink:0}
+#recs>.row{margin:0;row-gap:2px}  /* 並び順のボタンを先頭に置く（幅が狭いと件数は2行目に回る） */
+#tblwrap{flex:1 1 auto;min-height:120px;overflow:auto;-webkit-overflow-scrolling:touch;margin-top:6px;border-top:1px solid #333}
 thead th{position:sticky;top:0;background:#111;z-index:1;box-shadow:0 1px 0 #333}
 .foldbtn{display:block;width:100%;text-align:left;font-size:13px;line-height:1.3;padding:4px 10px;margin:4px 0;background:#2a2a2a;color:#ccc;border-radius:6px}
 .foldbtn .arr{display:inline-block;width:1.3em;color:#9cf}
@@ -239,10 +241,10 @@ td textarea{display:block;width:100%;min-width:4em;padding:4px 6px;font-size:14p
 <li>再生リストでは、動画が終わっても次の動画には進まず、終わりで止まります。進ませたいときは、「動画プレーヤーの設定」で「再生リストの自動再生」をオンにしてください</li>
 </ul>
 <h4>ボタンを隠す</h4>
-<p>「▼ ボタンを隠す」で記録用のボタンを隠せます（隠すと「▶ ボタンを表示する」になり、押すと出ます）。動画の下のものはサーブ・注目スパイク・見返したい・セット切替と、その下のボタンをまとめて隠します。セット切替の下のものは、取り消す・コメント欄用にコピー・記録ファイル読み書き・データベースと同期と、記録する時刻だけを隠します。隠した分だけ記録の表が広がります。</p>
+<p>「▼ ボタンを隠す」で記録用のボタンを隠せます（隠すと「▶ ボタンを表示する」になり、押すと出ます）。動画の下のものはサーブ・注目スパイク・見返したい・セット切替と、その下のボタンをまとめて隠します。セット切替の下のものは、取り消す・コメント欄用にコピー・記録ファイル読み書き・データベースと同期と、記録する時刻だけを隠します。隠した分だけ、記録の表までのスクロールが短くなります。</p>
 <h4>記録の表</h4>
 <ul>
-<li>表は画面の下まで広がり、中をスクロールできる（見出しの行は上に残る）</li>
+<li>ページをいちばん下までスクロールすると、「新しい順」の行が画面のいちばん上に来て、表が画面の下まで広がる。表は中をスクロールできる（見出しの行は上に残る）</li>
 <li>行をタップすると、その場面から再生する</li>
 <li>メモ欄に書き込める。「×」で消す（確認が出る）</li>
 <li>上のボタンで種類ごとに絞り込める。「新しい順／古い順」で並びを変えられる</li>
@@ -356,13 +358,15 @@ td textarea{display:block;width:100%;min-width:4em;padding:4px 6px;font-size:14p
 <textarea id="csvtxt" readonly></textarea>
 <div class="note" id="outnote"></div>
 </div>
-<div class="row" style="justify-content:space-between;align-items:center;margin-top:8px">
-<span id="count" class="note"></span>
+<div id="recs">
+<div class="row" style="justify-content:space-between;align-items:center">
 <span><button id="sortbtn" onclick="toggleSort()" style="background:#333;padding:6px 12px"></button>
 <button onclick="clearVideo()" style="background:#400;padding:6px 12px">この動画の記録を消去</button></span>
+<span id="count" class="note"></span>
 </div>
 <div id="flt" class="chips"></div>
 <div id="tblwrap"><table><thead><tr><th>時刻</th><th>点数</th><th>種類</th><th>サーブ</th><th>メモ</th><th></th></tr></thead><tbody id="list"></tbody></table></div>
+</div>
 <script>
 const $=id=>document.getElementById(id);
 let P=null,ready=false,L=[],seq=0,order={};
@@ -795,7 +799,7 @@ function draw(){
 /* ---------- 記録用のボタンを隠す ----------
    1（動画の下）: サーブ・注目スパイク・見返したい・セット切替（grp1）。隠すと、下の取り消しなど（grp2）も一緒に隠す。出すと両方出す
    2（セット切替の下。grp1 の中なので 1 で隠すと一緒に隠れる）: 取り消す・コメント欄用にコピー・記録ファイル読み書き・データベースと同期・記録する時刻（grp2）だけ
-   出ているときは「▼ ボタンを隠す」、隠しているときは「▶ ボタンを表示する」。状態はブラウザが覚える。隠した分だけ下の記録の表が広がる */
+   出ているときは「▼ ボタンを隠す」、隠しているときは「▶ ボタンを表示する」。状態はブラウザが覚える。隠した分だけ記録の表までのスクロールが短くなる */
 let fold={a:true,b:true};
 try{const x=JSON.parse(localStorage.getItem('vt_fold')||'null');if(x)fold={a:x.a!==false,b:x.b!==false}}catch(e){}
 if(!fold.a)fold.b=false;  // 上を隠しているときは、下の隠すボタンも見えないので下も隠しておく（前の版の保存から）
