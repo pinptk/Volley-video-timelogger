@@ -79,6 +79,7 @@ td input{width:100%;padding:4px;font-size:14px}
 .lead{display:flex;align-items:center;gap:6px;font-size:14px;color:#ccc;margin:4px 0 6px}
 .lead select{font-size:16px;padding:6px;border-radius:8px;background:#222;color:#eee;border:1px solid #444}
 .note{font-size:12px;color:#999}
+#htabs{margin:8px 0 4px}#htabs button{flex:1;background:#333}#htabs button.on{background:#b8ebc8;color:#0d3b1e;font-weight:bold;box-shadow:0 0 0 2px #4caf6e}
 .syncbtn{width:100%;padding:12px;background:#1d5f8a;font-weight:bold;margin:0 0 6px}
 .clist label.off{opacity:.6;cursor:default}
 .vbad{color:#f99!important}
@@ -98,9 +99,10 @@ td input{width:100%;padding:4px;font-size:14px}
 <div class="row" style="margin:0"><button onclick="closeUndo(false)" style="flex:1">キャンセル</button><button onclick="closeUndo(true)" style="flex:1;background:#b33;font-weight:bold">取り消す</button></div>
 </div></div>
 <div id="mhist" class="modal"><div class="mbox">
-<div class="mt">今まで見た動画</div>
-<div class="note" style="margin:4px 0 8px">新しい順に最大100本まで。古いものは消えていることがあります（しばらく使わないと、ブラウザが保存データを消すことがあるため）。</div>
-<div id="hlist" class="clist" style="max-height:58vh"></div>
+<div class="mt" id="htitle"></div>
+<div id="htabs" class="row"><button onclick="showList('hist')" data-k="hist">見た動画</button><button onclick="showList('db')" data-k="db">データベースにある動画</button></div>
+<div id="hnote" class="note" style="margin:4px 0 8px"></div>
+<div id="hlist" class="clist" style="max-height:52vh"></div>
 <div class="row" style="margin:8px 0 0"><button onclick="closeHist()" style="flex:1">閉じる</button></div>
 </div></div>
 <div id="mhdel" class="modal" style="z-index:11"><div class="mbox">
@@ -156,7 +158,7 @@ td input{width:100%;padding:4px;font-size:14px}
 <div class="row" style="margin:8px 0 0"><button onclick="closeCopy()" style="flex:1">閉じる</button><button id="cgo" onclick="doCopy()" style="flex:1;background:#2a5;font-weight:bold"></button></div>
 </div></div>
 <div class="row">
-<input id="url" placeholder="YouTubeの動画・再生リストのURL" style="flex:1 1 150px;min-width:0"><button onclick="load()">読込</button><button onclick="openHist()" style="background:#345">見た動画</button>
+<input id="url" placeholder="YouTubeの動画・再生リストのURL" style="flex:1 1 150px;min-width:0"><button onclick="load()">読込</button><button onclick="openList()" style="background:#345">動画一覧</button>
 </div>
 <div class="row">
 <input id="ta" value="Aチーム" style="flex:1 1 130px;min-width:0"><input id="tb" value="Bチーム" style="flex:1 1 130px;min-width:0"><span style="display:flex;gap:6px;flex:0 0 auto;margin-left:auto">
@@ -299,14 +301,50 @@ function addHist(v,list,title){const h=getHist(),k=h.findIndex(x=>x.v===v);
   const old=k>=0?h.splice(k,1)[0]:null;
   h.unshift({v,list:list||(old&&old.list)||'',title:title||(old&&old.title)||TT[v]||'',at:Date.now()});
   try{localStorage.setItem(HKEY,JSON.stringify(h.slice(0,100)))}catch(e){}}
-function openHist(keep){const h=getHist(),plt=getPLT(),p2=x=>String(x).padStart(2,'0'),sc=$('hlist').scrollTop;
-  $('hlist').innerHTML=h.length?h.map((x,i)=>{const n=L.filter(e=>e.v===x.v&&e.type!=='セット開始').length,d=x.at?new Date(x.at):null;
-    const sub=[d?(d.getMonth()+1)+'/'+d.getDate()+' '+p2(d.getHours())+':'+p2(d.getMinutes()):'',TN[x.v]?vsText(x.v):'',n?n+'件':''].filter(Boolean).join('・');
+/* ---------- 動画一覧 ----------
+   データベースを設定していれば「見た動画」「データベースにある動画」のボタンを出し、押した方の一覧を出す。
+   設定していなければ、見た動画の一覧をそのまま出す */
+let hmode='',hdb=null,hdbGen=0;
+function openList(){hmode=hasCfg()&&grp()?'':'hist';hdb=null;$('mhist').classList.add('on');drawList()}
+function showList(k){hmode=k;if(k==='db')loadListDB();drawList()}
+function drawList(keep){const tabs=hasCfg()&&grp();
+  $('htitle').textContent=tabs?'動画一覧':'今まで見た動画';
+  $('htabs').style.display=tabs?'flex':'none';
+  $('htabs').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.k===hmode));
+  $('hlist').style.display=hmode?'block':'none';
+  if(hmode==='hist')openHist(keep);else if(hmode==='db')drawListDB(keep);else{$('hnote').className='note';$('hnote').textContent='見る一覧を選んでください'}}
+function p2(x){return String(x).padStart(2,'0')}
+function fmtAt(ms){if(!ms)return'';const d=new Date(ms);return(d.getMonth()+1)+'/'+d.getDate()+' '+p2(d.getHours())+':'+p2(d.getMinutes())}
+/* データベースにある動画。開くたびに読み直す */
+async function fetchDocs(){const{f,db}=await within(fb(),20000);
+  const qs=await within(f.getDocs(f.collection(db,'groups',grp(),'videos')),20000);
+  const docs={};qs.forEach(s=>{docs[s.id]=s.data()});return docs}
+async function loadListDB(){const g=++hdbGen;hdb={st:'load'};
+  try{const docs=await fetchDocs();if(g!==hdbGen)return;hdb={st:'ready',docs}}
+  catch(e){if(g!==hdbGen)return;hdb={st:'err',err:fbErr(e)}}
+  if(hmode==='db'&&$('mhist').classList.contains('on'))drawList()}
+function drawListDB(keep){const plt=getPLT(),sc=$('hlist').scrollTop;
+  $('hnote').className='note'+(hdb&&hdb.st==='err'?' vbad':'');
+  if(!hdb||hdb.st!=='ready'){$('hnote').textContent=hdb&&hdb.st==='err'?hdb.err:'データベースを読み込み中…';$('hlist').innerHTML='';return}
+  const ms=x=>x&&x.toMillis?x.toMillis():+x||0,docs=hdb.docs;
+  const vs=Object.keys(docs).sort((a,b)=>ms(docs[b].updated_at)-ms(docs[a].updated_at));
+  $('hnote').textContent='合言葉「'+grp()+'」でデータベースにある動画（新しく同期された順）。開いたあと「データベースと同期」で記録を取り込めます。';
+  $('hlist').innerHTML=vs.length?vs.map((v,i)=>{const d=docs[v],nd=(d.records||[]).filter(r=>r.type!=='セット開始').length,nl=L.filter(e=>e.v===v&&e.type!=='セット開始').length;
+    const sub=[fmtAt(ms(d.updated_at)),(d.team_a||'')+' vs '+(d.team_b||''),'データベース '+nd+'件',nl?'この端末 '+nl+'件':'この端末にはまだありません'].filter(Boolean).join('・');
+    const pl=d.playlist_id?'再生リスト：'+(plt[d.playlist_id]||'（名前を取得できていません）'):'';
+    return`<div class="hrow"><button class="hitem" data-i="${i}"><span>${esc(d.video_title||TT[v]||v)}</span>${pl?'<span class="pl">'+esc(pl)+'</span>':''}<span class="vsub">${esc(sub)}</span></button></div>`}).join(''):'<div class="note" style="padding:12px 4px">まだありません</div>';
+  $('hlist').querySelectorAll('.hitem').forEach(b=>b.onclick=()=>{const v=vs[+b.dataset.i];closeHist();openVideo(v,docs[v].playlist_id||'')});
+  $('hlist').scrollTop=keep?sc:0;
+  [...new Set(vs.map(v=>docs[v].playlist_id).filter(Boolean))].forEach(fetchPLT)}
+function openHist(keep){const h=getHist(),plt=getPLT(),sc=$('hlist').scrollTop;
+  $('hnote').className='note';$('hnote').textContent='新しい順に最大100本まで。古いものは消えていることがあります（しばらく使わないと、ブラウザが保存データを消すことがあるため）。';
+  $('hlist').innerHTML=h.length?h.map((x,i)=>{const n=L.filter(e=>e.v===x.v&&e.type!=='セット開始').length;
+    const sub=[fmtAt(x.at),TN[x.v]?vsText(x.v):'',n?n+'件':''].filter(Boolean).join('・');
     const pl=x.list?'再生リスト：'+(plt[x.list]||'（名前を取得できていません）'):'';
     return`<div class="hrow"><button class="hitem" data-i="${i}"><span>${esc(x.title||TT[x.v]||x.v)}</span>${pl?'<span class="pl">'+esc(pl)+'</span>':''}<span class="vsub">${esc(sub)}</span></button><button class="hdel" data-i="${i}" aria-label="一覧から消す">×</button></div>`}).join(''):'<div class="note" style="padding:12px 4px">まだありません</div>';
   $('hlist').querySelectorAll('.hitem').forEach(b=>b.onclick=()=>{const x=h[+b.dataset.i];closeHist();openVideo(x.v,x.list)});
   $('hlist').querySelectorAll('.hdel').forEach(b=>b.onclick=()=>askHistDel(h[+b.dataset.i]));
-  $('hlist').scrollTop=keep?sc:0;$('mhist').classList.add('on');
+  $('hlist').scrollTop=keep?sc:0;
   [...new Set(h.map(x=>x.list).filter(Boolean))].forEach(fetchPLT)}
 /* 見た動画を一覧から消す。記録がある動画は、記録も消すかどうかを選んでもらう */
 let histDel=null;
@@ -317,8 +355,8 @@ function askHistDel(x){histDel=x;const n=L.filter(e=>e.v===x.v).length;
 function closeHistDel(how){const x=histDel;histDel=null;$('mhdel').classList.remove('on');if(!x||!how)return;
   const h=getHist().filter(y=>y.v!==x.v);try{localStorage.setItem(HKEY,JSON.stringify(h))}catch(e){}
   if(how==='all'){const n=dropRecs(e=>e.v===x.v);draw();toast('一覧と記録（'+n+'件）を消しました')}else toast('一覧から消しました');
-  openHist(true)}
-function closeHist(){$('mhist').classList.remove('on')}
+  drawList(true)}
+function closeHist(){$('mhist').classList.remove('on');hdbGen++}
 /* 動画を開く（再生リストの中の動画なら再生リストごと）。前に見ていた位置から */
 function openVideo(v,list){openSrc({v,list:list||'',index:0,t:POS[v]||0},false)}
 
@@ -332,7 +370,7 @@ async function fetchPLT(list){if(!list||pltAsked[list]||getPLT()[list])return;pl
   const t=await getTitleOf('https://www.youtube.com/playlist?list='+list);if(!t)return;
   const m=getPLT();m[list]=t;const ks=Object.keys(m);if(ks.length>200)delete m[ks[0]];
   try{localStorage.setItem(PLKEY,JSON.stringify(m))}catch(e){}
-  if($('mhist').classList.contains('on'))openHist()}
+  if($('mhist').classList.contains('on'))drawList(true)}
 function plSync(){const sel=$('plsel');
   if(!cur.list){if(plIds.length){plIds=[];sel.style.display='none'}return}
   fetchPLT(cur.list);
@@ -813,7 +851,7 @@ function setupFromHash(){if(!/[#&]sync=/.test(location.hash))return;
   // プレーヤーの準備ができたときにお知らせが消されるので、準備ができてから出す
   if(!st){const t='設定リンクを読み取れませんでした（リンクが途中で切れていないか確認してください）',show=()=>ready?setTimeout(()=>msg(t),300):setTimeout(show,300);show();return}
   const old=cfg(),same=old&&old.projectId===st.c.projectId&&grp()===st.g;
-  if(same){toast('この設定はもう入っています');return}
+  if(same){const t='データベースの設定はもう入っています。次からは設定リンクではなく、ふつうのページのリンクで開いてください',show=()=>ready?setTimeout(()=>msg(t),300):setTimeout(show,300);show();return}
   askConf('データベースの設定を取り込みますか？\n接続先：'+st.c.projectId+'\n合言葉：'+st.g+
     (old?'\n\n今の設定（接続先：'+old.projectId+(grp()?'、合言葉：'+grp():'')+'）から切り替わります。':'')+
     '\n\nチームの人から届いたリンクだけ取り込んでください。','設定する',()=>{saveSetup(st.c,st.g);toast('データベースの設定をしました')},'#2a5')}
@@ -864,10 +902,8 @@ function openSync(){sy={st:'',gen:++syGen,docs:{},sel:new Set(),off:new Set(),ma
   $('msync').classList.add('on');if(hasCfg()&&grp())loadSync();else drawSync()}
 function closeSync(){if(sy&&sy.st==='run')return;sy=null;$('msync').classList.remove('on')}
 async function loadSync(){const g=sy.gen;sy.st='load';sy.err='';drawSync();
-  try{const{f,db}=await within(fb(),20000);
-    const qs=await within(f.getDocs(f.collection(db,'groups',grp(),'videos')),20000);
-    if(!sy||sy.gen!==g)return;
-    const docs={};qs.forEach(s=>{docs[s.id]=s.data()});sy.docs=docs;
+  try{const docs=await fetchDocs();
+    if(!sy||sy.gen!==g)return;sy.docs=docs;
     sy.nm={};Object.keys(docs).forEach(v=>{const d=docs[v];if(d.team_a&&d.team_b)sy.nm[v]={a:d.team_a,b:d.team_b}});
     sy.map=guessMap(sy.nm);
     // 並び: 再生中の動画 → この再生リストのほかの動画 → この端末に記録のあるほかの動画 → データベースにだけある動画
