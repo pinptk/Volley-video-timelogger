@@ -94,8 +94,8 @@ td input{width:100%;padding:4px;font-size:14px}
 .help a{color:#9cf}
 .help b{color:#fff}
 #rules{white-space:pre;overflow:auto;font-size:11px;line-height:1.5;padding:8px;max-height:30vh;border:1px solid #333;border-radius:6px;background:#111;margin:6px 0}
-#htabs{margin:8px 0 4px}#htabs button{flex:1;background:#333}#htabs button.on{background:#b8ebc8;color:#0d3b1e;font-weight:bold;box-shadow:0 0 0 2px #4caf6e}
-.syncbtn{width:100%;padding:12px;background:#1d5f8a;font-weight:bold;margin:0 0 6px}
+#htabs,#ftabs{margin:8px 0 4px}#htabs button,#ftabs button{flex:1;background:#333}#htabs button.on{background:#b8ebc8;color:#0d3b1e;font-weight:bold;box-shadow:0 0 0 2px #4caf6e}
+.tools .syncbtn{background:#1d5f8a}
 .clist label.off{opacity:.6;cursor:default}
 .vbad{color:#f99!important}
 #sgin,#scfg{flex:1;min-width:0;background:#111;color:#eee;border:1px solid #555}
@@ -207,7 +207,7 @@ td input{width:100%;padding:4px;font-size:14px}
 <li>YouTube の動画か再生リストの URL を入れて「読込」</li>
 <li>チーム名（「Aチーム」「Bチーム」）を書き換える</li>
 <li>動画を見ながら、場面ごとにボタンを押す</li>
-<li>終わったら「データベースと同期」で送るか、「記録ファイル書き出し」で保存する</li>
+<li>終わったら「データベースと同期」で送るか、「記録ファイル読み書き」の「書き出し」で保存する</li>
 </ol>
 <h4>記録のボタン</h4>
 <ul>
@@ -255,8 +255,9 @@ td input{width:100%;padding:4px;font-size:14px}
 </ul>
 <h4>記録ファイル（CSV）</h4>
 <ul>
-<li>「記録ファイル書き出し」で、選んだ動画の記録を CSV で保存する</li>
-<li>「記録ファイル読み込み」で、CSV の記録を今の記録に追加する（重複は取り込まない）</li>
+<li>「記録ファイル読み書き」を押して、「書き出し」か「読み込み」を選ぶ</li>
+<li>書き出し：選んだ動画の記録を CSV で保存する</li>
+<li>読み込み：CSV の記録を今の記録に追加する（重複は取り込まない）</li>
 <li>チーム名が自分のものと違うときは「チーム名の対応」を選ぶ。表示は自分のチーム名のまま</li>
 </ul>
 <h4>リンク</h4>
@@ -268,6 +269,12 @@ td input{width:100%;padding:4px;font-size:14px}
 </ul>
 <p class="note">くわしい説明は、このツールの GitHub のページ（README）にあります。</p>
 </div></details>
+</div></div>
+<div id="mfile" class="modal"><div class="mbox">
+<div class="mt">記録ファイル読み書き</div>
+<div id="ftabs" class="row"><button onclick="fileAct('exp')">書き出し</button><button onclick="fileAct('imp')">読み込み</button></div>
+<div class="note" style="margin:4px 0 8px">書き出し：記録を CSV ファイルに保存します（書き出す動画を選べます）。<br>読み込み：CSV ファイルの記録を、今の記録に追加します。</div>
+<div class="row" style="margin:8px 0 0"><button onclick="closeFile()" style="flex:1">閉じる</button></div>
 </div></div>
 <div id="mopen" class="modal"><div class="mbox">
 <div class="mt">別の動画の記録です</div>
@@ -319,10 +326,9 @@ td input{width:100%;padding:4px;font-size:14px}
 <div class="tools">
 <button onclick="askUndo()">取り消す</button>
 <button onclick="copyComment()" style="background:#2a5">コメント欄用にコピー</button>
-<button onclick="exportCSV()">記録ファイル書き出し</button>
-<button onclick="$('file').click()">記録ファイル読み込み</button>
-</div>
+<button onclick="openFile()">記録ファイル読み書き</button>
 <button class="syncbtn" onclick="openSync()">データベースと同期</button>
+</div>
 <label class="lead">記録する時刻：ボタンを押した<select id="lead"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option></select>秒前</label>
 <input type="file" id="file" accept=".csv,text/csv,text/plain" style="display:none" onchange="importCSV(this)">
 <div id="out">
@@ -718,7 +724,7 @@ function closeMemo(ok){if(!pendRV)return;const p=pendRV;pendRV=null;
   resumePlay(p.resume)}
 $('mform').onsubmit=e=>{e.preventDefault();closeMemo(true)};
 document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;
-  if(pendConf)closeConf(false);else if($('mset').classList.contains('on'))closeSet();else if(pendRV)closeMemo(false);else if(pendUndo)closeUndo(false);else if($('mcopy').classList.contains('on'))closeCopy();else if(imp)closeImp();else if($('mexp').classList.contains('on'))closeExp();else if(histDel)closeHistDel('');else if($('mhist').classList.contains('on'))closeHist();else if($('mopen').classList.contains('on'))closeOpen();else if(sy&&sy.st!=='run')closeSync()});
+  if(pendConf)closeConf(false);else if($('mset').classList.contains('on'))closeSet();else if(pendRV)closeMemo(false);else if(pendUndo)closeUndo(false);else if($('mcopy').classList.contains('on'))closeCopy();else if(imp)closeImp();else if($('mexp').classList.contains('on'))closeExp();else if(histDel)closeHistDel('');else if($('mhist').classList.contains('on'))closeHist();else if($('mopen').classList.contains('on'))closeOpen();else if($('mfile').classList.contains('on'))closeFile();else if(sy&&sy.st!=='run')closeSync()});
 /* 取り消す：最後に記録したものを、確認してから消す */
 let pendUndo=null;
 function recLabel(e,i){const C=calc();
@@ -849,6 +855,10 @@ const COLS=['video_id','video_title','playlist_id','playlist_index','team_a','te
 function buildCSV(vs){const q=v=>'"'+String(v).replace(/"/g,'""')+'"';const C=calc();
   const rows=[COLS].concat(L.map((e,i)=>({e,i})).filter(x=>vs.has(x.e.v)).map(({e,i})=>[e.v,e.title,e.list,e.pi>=0?e.pi+1:'',tnI('A',e.v),tnI('B',e.v),C[i].s,e.t,fmt(e.t),C[i].r,C[i].a,C[i].b,e.type,e.side,tnI(e.side,e.v),e.memo,e.uid||'',e.nc?1:'']));
   return rows.map(r=>r.map(q).join(',')).join('\n')}
+/* 「記録ファイル読み書き」: 書き出しか読み込みかを選んでもらう */
+function openFile(){$('mfile').classList.add('on')}
+function closeFile(){$('mfile').classList.remove('on')}
+function fileAct(k){closeFile();if(k==='exp')exportCSV();else $('file').click()}
 /* 書き出す動画を選ぶ。初めは再生中の動画だけ選んだ状態。
    再生中の再生リストの動画を先に、ほかの動画（別の再生リストや単独の動画）をあとに並べる */
 let eSel=new Set(),eVids=[];
