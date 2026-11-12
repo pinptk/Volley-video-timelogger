@@ -1,0 +1,31 @@
+rules_version = '2';
+// 「データベースと同期」用の Firestore のルール。
+// Firebase コンソールの「Firestore Database → ルール」に、このファイルの中身をそのまま貼って「公開」してください。
+// - データは groups/{合言葉}/videos/{動画ID} だけ。合言葉を知らない人は読めない（一覧も取れない）
+// - チーム名が「Aチーム」「Bチーム」のままの動画は書き込めない
+// - ドキュメントの削除はできない（記録を消すときは中の deleted に印を残す）
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /groups/{code}/videos/{videoId} {
+      function okCode() {
+        return code.matches('^[A-Za-z0-9_-]{8,40}$');
+      }
+      function named(s) {
+        return s is string && s.size() > 0 && s.size() <= 100 && s != 'Aチーム' && s != 'Bチーム';
+      }
+      function okDoc() {
+        let d = request.resource.data;
+        return d.keys().hasOnly(['video_id', 'video_title', 'playlist_id', 'playlist_index',
+                                 'team_a', 'team_b', 'records', 'deleted', 'updated_at'])
+          && d.video_id == videoId
+          && named(d.team_a) && named(d.team_b)
+          && d.records is list && d.records.size() <= 5000
+          && d.deleted is list && d.deleted.size() <= 20000
+          && d.updated_at == request.time;
+      }
+      allow read: if okCode();
+      allow create, update: if okCode() && videoId.matches('^[A-Za-z0-9_-]{11}$') && okDoc();
+      allow delete: if false;
+    }
+  }
+}
