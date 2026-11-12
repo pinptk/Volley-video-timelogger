@@ -79,6 +79,19 @@ td input{width:100%;padding:4px;font-size:14px}
 .lead{display:flex;align-items:center;gap:6px;font-size:14px;color:#ccc;margin:4px 0 6px}
 .lead select{font-size:16px;padding:6px;border-radius:8px;background:#222;color:#eee;border:1px solid #444}
 .note{font-size:12px;color:#999}
+#mset{padding-top:5vh}#mset .mbox{max-width:600px;max-height:90vh;padding-top:0}
+.help code{background:#111;padding:0 4px;border-radius:4px}
+.shead{position:sticky;top:0;background:#222;display:flex;align-items:center;justify-content:space-between;padding:12px 0 8px;z-index:1}
+.sec{border-top:1px solid #333}
+.sec>summary{font-weight:bold;padding:12px 2px;cursor:pointer;color:#d9b3ff;list-style-position:inside}
+.sec>div{padding:0 2px 12px}
+.help{font-size:14px;line-height:1.7;color:#ddd}
+.help h4{margin:14px 0 2px;font-size:14px;color:#7fe}
+.help ul,.help ol{margin:2px 0;padding-left:1.3em}
+.help p{margin:4px 0}
+.help a{color:#9cf}
+.help b{color:#fff}
+#rules{white-space:pre;overflow:auto;font-size:11px;line-height:1.5;padding:8px;max-height:30vh;border:1px solid #333;border-radius:6px;background:#111;margin:6px 0}
 #htabs{margin:8px 0 4px}#htabs button{flex:1;background:#333}#htabs button.on{background:#b8ebc8;color:#0d3b1e;font-weight:bold;box-shadow:0 0 0 2px #4caf6e}
 .syncbtn{width:100%;padding:12px;background:#1d5f8a;font-weight:bold;margin:0 0 6px}
 .clist label.off{opacity:.6;cursor:default}
@@ -129,6 +142,122 @@ td input{width:100%;padding:4px;font-size:14px}
 </div>
 <div class="row" style="margin:10px 0 0"><button onclick="closeSync()" style="flex:1">閉じる</button><button id="sgo" onclick="runSync()" style="flex:1;background:#2a5;font-weight:bold"></button></div>
 </div></div>
+<div id="mset" class="modal"><div class="mbox">
+<div class="shead"><div class="mt" style="font-size:18px">設定</div><button onclick="closeSet()">閉じる</button></div>
+
+<details class="sec" id="sdb"><summary>データベース</summary><div id="setdb"></div></details>
+
+<details class="sec" id="sprep" ontoggle="if(this.open)loadRules()"><summary>データベースの用意のしかた</summary><div class="help">
+<p>チームで記録を共有するデータベースは、チームの<b>1人だけ</b>が用意します。ほかの人は、その人から届く設定リンクを開くだけです。Google アカウントが1つあればでき、無料のプラン（Spark）で足ります。</p>
+<h4>1. Firebase のプロジェクトを作る</h4>
+<ol>
+<li><a href="https://console.firebase.google.com/" target="_blank" rel="noopener">Firebase コンソール</a>を開き、Google アカウントでログインする</li>
+<li>「プロジェクトを作成」を押し、名前を付けて進める（Google アナリティクスは使わなくてよい）</li>
+</ol>
+<h4>2. Firestore（データベース）を作る</h4>
+<ol>
+<li>左のメニューの「構築」→「Firestore Database」→「データベースを作成」</li>
+<li>場所は <code>asia-northeast1</code>（東京）など近いところ、モードは「本番環境モード」</li>
+</ol>
+<h4>3. ルールを貼る</h4>
+<p>Firestore Database の「ルール」のタブを開き、入っている文をすべて消して、下のルールを貼り付けて「公開」を押します。</p>
+<div id="rules">読み込み中…</div>
+<button id="rcopy" onclick="copyText(rulesText,'ルールをコピーしました')" style="width:100%;background:#345" disabled>ルールをコピー</button>
+<p class="note">合言葉を知らない人は読めない・チーム名が「Aチーム」「Bチーム」のままの動画は書き込めない・データベースから動画を消せない、というルールです。</p>
+<h4>4. 接続情報をもらう</h4>
+<ol>
+<li>「プロジェクトの概要」の横の歯車 →「プロジェクトの設定」</li>
+<li>下の「マイアプリ」でウェブ（<code>&lt;/&gt;</code>）のアプリを追加する（ニックネームは何でもよい。Firebase Hosting は使わない）</li>
+<li><code>const firebaseConfig = { … };</code> の部分をコピーする</li>
+</ol>
+<h4>5. このツールに設定して、チームに配る</h4>
+<ol>
+<li>この画面の「データベース」に、コピーした接続情報を貼り付ける</li>
+<li>合言葉を「作る」で作って「決定」。「データベースにつながりました」と出れば完了</li>
+<li>「設定リンクをコピー」を押して、チームの人に LINE などで送る</li>
+</ol>
+<h4>別の Firebase に切り替える（試し用から本番へ）</h4>
+<ol>
+<li>切り替え先の Google アカウントで、上の1〜4をする</li>
+<li>試し用の記録を移すなら、切り替える前に「データベースと同期」で「すべて選ぶ」にして同期し、記録をこの端末に取り込んでおく</li>
+<li>「データベース」の「変更」で、切り替え先の接続情報を貼って「決定」</li>
+<li>移す記録があれば、もう一度「すべて選ぶ」で同期する（切り替え先のデータベースに送られる）</li>
+<li>新しい設定リンクをチームの人に送り直す</li>
+</ol>
+<h4>ほかのチームの人に使わせないために</h4>
+<ul>
+<li>接続先はページにもリポジトリにも入っていないので、ページを見つけただけの人はデータベースにつながりません</li>
+<li>設定リンクには接続先と合言葉が入っています。チームの外には送らないでください</li>
+<li>設定リンクが外に出てしまったときは、全員が同期してから合言葉を変え、新しい設定リンクを送り直してください（変えたあとにもう一度同期すると、新しい合言葉の場所に記録が送られます）</li>
+</ul>
+</div></details>
+
+<details class="sec" id="shelp"><summary>使い方</summary><div class="help">
+<h4>基本の流れ</h4>
+<ol>
+<li>YouTube の動画か再生リストの URL を入れて「読込」</li>
+<li>チーム名（「Aチーム」「Bチーム」）を書き換える</li>
+<li>動画を見ながら、場面ごとにボタンを押す</li>
+<li>終わったら「データベースと同期」で送るか、「記録ファイル書き出し」で保存する</li>
+</ol>
+<h4>記録のボタン</h4>
+<ul>
+<li><b>サーブ</b>：どちらのチームのサーブか。押すたびにラリー番号が1つ進む。<b>ダブルタップ</b>すると「前のラリーはノーカウント」として記録し、前のラリーの点をどちらにも足さない</li>
+<li><b>注目スパイク</b>：注目したいスパイク</li>
+<li><b>見返したい</b>：動画が止まってメモの欄が出る。「記録する」で記録</li>
+<li><b>セット切替</b>：ここから次のセット</li>
+<li><b>取り消す</b>：この動画で最後に記録したものを取り消す（確認が出る）</li>
+<li><b>コメント欄用にコピー</b>：YouTube のコメント欄に貼れる形でコピー。貼ると時刻がその場面へのリンクになる</li>
+</ul>
+<p>記録する時刻は、ボタンを押した時刻の3秒前です（プレーを見てから押すまでの遅れの分）。ボタンの下の「記録する時刻」で0〜10秒から選べます。</p>
+<h4>動画のタップ操作</h4>
+<ul>
+<li>左側をダブルタップで10秒戻す、右側をダブルタップで10秒進める（続けてタップするとさらに10秒ずつ）</li>
+<li>1回タップで再生・一時停止、長押ししている間は2倍速</li>
+<li>読み込んだ直後は、最初の1回だけプレーヤーの再生ボタンを押してください</li>
+</ul>
+<h4>記録の表</h4>
+<ul>
+<li>行をタップすると、その場面から再生する</li>
+<li>メモ欄に書き込める。「×」で消す（確認が出る）</li>
+<li>上のボタンで種類ごとに絞り込める。「新しい順／古い順」で並びを変えられる</li>
+<li>黄色の印は最後に記録した行、青い印は今の再生位置のすぐ前の行</li>
+<li>表に出るのは今の動画の記録だけ（ほかの動画の記録も保存されている）</li>
+</ul>
+<h4>セット・点数</h4>
+<ul>
+<li>「セット-R」は「セット番号-ラリー番号」。サーブを記録するたびにラリー番号が進む</li>
+<li>「点数」はそのラリーが始まる時点の点数。セットの2本目以降のサーブは、サーブしたチームの1点として数える</li>
+<li>サーブを記録し忘れると、そこから点数がずれる</li>
+</ul>
+<h4>チーム名</h4>
+<p>チーム名は動画ごとに覚えます。まだ名前のない動画を開くと、再生リストで手前の動画の名前が入ります。</p>
+<h4>動画一覧</h4>
+<p>「動画一覧」で、今まで見た動画（最大100本）と、データベースにある動画を見られます。タップするとその動画を開きます。</p>
+<h4>データベースと同期</h4>
+<ul>
+<li>同じ合言葉の人どうしで記録を共有する。最初に「データベース」の設定が要る（チームの人から届いた設定リンクを開けば終わり）</li>
+<li>同期する動画と記録の種類を選んで「同期する」。データベースの記録を取り込み、この端末の記録を送る</li>
+<li>ほかの人が記録した同じ場面（6秒以内の同じチームのサーブなど）は1つにまとめる</li>
+<li>チーム名が「Aチーム」「Bチーム」のままの動画は、データベースにまだ無ければ送れない</li>
+<li>記録を消すと、同期したときにデータベースとほかの人の端末からも消える</li>
+</ul>
+<h4>記録ファイル（CSV）</h4>
+<ul>
+<li>「記録ファイル書き出し」で、選んだ動画の記録を CSV で保存する</li>
+<li>「記録ファイル読み込み」で、CSV の記録を今の記録に追加する（重複は取り込まない）</li>
+<li>チーム名が自分のものと違うときは「チーム名の対応」を選ぶ。表示は自分のチーム名のまま</li>
+</ul>
+<h4>リンク</h4>
+<p>「リンクをコピー」で、今の動画とチーム名を入れたリンクを作れます（記録は入りません）。「クリア」で空の状態に戻ります（記録は消えません）。</p>
+<h4>保存について</h4>
+<ul>
+<li>記録はこのブラウザに自動で保存されます。別の端末やブラウザには引き継がれないので、データベースと同期するか CSV で書き出しておいてください</li>
+<li>iPhone・iPad の Safari は、7日間開かないと保存した記録を消すことがあります。ホーム画面に追加して使うと消えにくくなります</li>
+</ul>
+<p class="note">くわしい説明は、このツールの GitHub のページ（README）にあります。</p>
+</div></details>
+</div></div>
 <div id="mopen" class="modal"><div class="mbox">
 <div class="mt">別の動画の記録です</div>
 <div class="note" id="onote" style="margin:4px 0 8px"></div>
@@ -158,13 +287,13 @@ td input{width:100%;padding:4px;font-size:14px}
 <div class="row" style="margin:8px 0 0"><button onclick="closeCopy()" style="flex:1">閉じる</button><button id="cgo" onclick="doCopy()" style="flex:1;background:#2a5;font-weight:bold"></button></div>
 </div></div>
 <div class="row">
-<input id="url" placeholder="YouTubeの動画・再生リストのURL" style="flex:1 1 150px;min-width:0"><button onclick="load()">読込</button><button onclick="openList()" style="background:#345">動画一覧</button>
+<input id="url" placeholder="YouTubeの動画・再生リストのURL" style="flex:1 1 110px;min-width:0"><button onclick="load()">読込</button><button onclick="openList()" style="background:#345">動画一覧</button><button onclick="openSet()" style="background:#444">設定</button>
 </div>
 <div class="row">
 <input id="ta" value="Aチーム" style="flex:1 1 130px;min-width:0"><input id="tb" value="Bチーム" style="flex:1 1 130px;min-width:0"><span style="display:flex;gap:6px;flex:0 0 auto;margin-left:auto">
 <button onclick="copyLink()" style="background:#2a5">リンクをコピー</button><button onclick="clearAll()" style="background:#444">クリア</button></span>
 </div>
-<div id="wrap"><div id="player"></div><div id="ph">YouTubeの動画か再生リストのURLを入れて<br>「読込」を押してください</div><div id="tap"><div id="tapL" class="tapfx"></div><div id="tapS" class="tapfx">2倍速 ▶▶</div><div id="tapR" class="tapfx"></div></div></div>
+<div id="wrap"><div id="player"></div><div id="ph">YouTubeの動画か再生リストのURLを入れて<br>「読込」を押してください<br><span style="font-size:13px;color:#777">使い方は右上の「設定」にあります</span></div><div id="tap"><div id="tapL" class="tapfx"></div><div id="tapS" class="tapfx">2倍速 ▶▶</div><div id="tapR" class="tapfx"></div></div></div>
 <div id="now"></div>
 <select id="plsel" onchange="pick(this.value)"></select>
 <div id="plnav"><button onclick="ready&&P.previousVideo()">◀ 前の動画</button><button onclick="ready&&P.nextVideo()">次の動画 ▶</button></div>
@@ -540,7 +669,7 @@ function closeMemo(ok){if(!pendRV)return;const p=pendRV;pendRV=null;
   resumePlay(p.resume)}
 $('mform').onsubmit=e=>{e.preventDefault();closeMemo(true)};
 document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;
-  if(pendConf)closeConf(false);else if(pendRV)closeMemo(false);else if(pendUndo)closeUndo(false);else if($('mcopy').classList.contains('on'))closeCopy();else if(imp)closeImp();else if($('mexp').classList.contains('on'))closeExp();else if(histDel)closeHistDel('');else if($('mhist').classList.contains('on'))closeHist();else if($('mopen').classList.contains('on'))closeOpen();else if(sy&&sy.st!=='run')closeSync()});
+  if(pendConf)closeConf(false);else if($('mset').classList.contains('on'))closeSet();else if(pendRV)closeMemo(false);else if(pendUndo)closeUndo(false);else if($('mcopy').classList.contains('on'))closeCopy();else if(imp)closeImp();else if($('mexp').classList.contains('on'))closeExp();else if(histDel)closeHistDel('');else if($('mhist').classList.contains('on'))closeHist();else if($('mopen').classList.contains('on'))closeOpen();else if(sy&&sy.st!=='run')closeSync()});
 /* 取り消す：最後に記録したものを、確認してから消す */
 let pendUndo=null;
 function recLabel(e,i){const C=calc();
@@ -854,7 +983,7 @@ function setupFromHash(){if(!/[#&]sync=/.test(location.hash))return;
   if(same){const t='データベースの設定はもう入っています。次からは設定リンクではなく、ふつうのページのリンクで開いてください',show=()=>ready?setTimeout(()=>msg(t),300):setTimeout(show,300);show();return}
   askConf('データベースの設定を取り込みますか？\n接続先：'+st.c.projectId+'\n合言葉：'+st.g+
     (old?'\n\n今の設定（接続先：'+old.projectId+(grp()?'、合言葉：'+grp():'')+'）から切り替わります。':'')+
-    '\n\nチームの人から届いたリンクだけ取り込んでください。','設定する',()=>{saveSetup(st.c,st.g);toast('データベースの設定をしました')},'#2a5')}
+    '\n\nチームの人から届いたリンクだけ取り込んでください。','設定する',()=>{saveSetup(st.c,st.g);toast('データベースの設定をしました');if($('mset').classList.contains('on')){ss={};drawSetDB()}},'#2a5')}
 async function fb(){const c=cfg();if(!c)throw new Error('nocfg');const key=c.projectId+'/'+c.apiKey;if(FB&&FB.key===key)return FB;
   const b='https://www.gstatic.com/firebasejs/'+FBV+'/';
   const[a,f]=await Promise.all([import(b+'firebase-app.js'),import(b+'firebase-firestore.js')]);
@@ -898,7 +1027,7 @@ const ALLT={has:()=>true};
 function syLoc(v,flip){return L.filter(e=>e.v===v).map(e=>flip?{...e,side:oside(e.side)}:{...e})}
 function syBlocked(v){return!sy.docs[v]&&needNames(TN[v])}
 function syTitle(v){const e=L.find(x=>x.v===v),d=sy&&sy.docs[v];return TT[v]||(e&&e.title)||(d&&d.video_title)||v}
-function openSync(){sy={st:'',gen:++syGen,docs:{},sel:new Set(),off:new Set(),map:{},nm:{},vids:[],edit:false,err:''};
+function openSync(){sy={st:'',gen:++syGen,docs:{},sel:new Set(),off:new Set(),map:{},nm:{},vids:[],err:''};
   $('msync').classList.add('on');if(hasCfg()&&grp())loadSync();else drawSync()}
 function closeSync(){if(sy&&sy.st==='run')return;sy=null;$('msync').classList.remove('on')}
 async function loadSync(){const g=sy.gen;sy.st='load';sy.err='';drawSync();
@@ -916,35 +1045,60 @@ async function loadSync(){const g=sy.gen;sy.st='load';sy.err='';drawSync();
     sy.gOf=gOf;sy.sel=new Set(sy.vids.includes(now)&&!syBlocked(now)?[now]:[]);sy.st='ready'}
   catch(e){if(!sy||sy.gen!==g)return;sy.st='err';sy.err=fbErr(e)}
   drawSync()}
+/* ---------- 設定画面 ----------
+   データベースの設定（接続先と合言葉）、データベースの用意のしかた、使い方。
+   ss: データベースの設定欄の状態（edit: 入力欄を出す、draft: エラーで描き直しても入れたものを残す、err・ok: お知らせ、busy: 確認中） */
+let ss={};
+function openSet(sec){ss={};drawSetDB();$('mset').classList.add('on');
+  document.querySelectorAll('#mset details').forEach(d=>{d.open=d.id===sec});
+  const b=$('mset').querySelector('.mbox');b.scrollTop=0;if(sec)setTimeout(()=>$(sec).scrollIntoView({block:'start'}),0)}
+function closeSet(){if(ss.busy)return;$('mset').classList.remove('on')}
 function genGrp(){const c='abcdefghjkmnpqrstuvwxyz23456789',a=new Uint32Array(12);crypto.getRandomValues(a);$('sgin').value=[...a].map(x=>c[x%c.length]).join('')}
-/* 設定の決定。貼り付け欄には設定リンクか接続情報を入れる（設定リンクなら合言葉もそこから） */
-function setGrp(){const t=$('scfg').value,st=readSetup(t);let c=st?st.c:parseCfg(t),g=st?st.g:$('sgin').value.trim();
-  sy.draft={t,g:$('sgin').value};  // エラーで描き直しても、入れたものを残す
-  if(!c){sy.err=t.trim()?'接続情報を読み取れませんでした。設定リンクか、Firebase の firebaseConfig（apiKey と projectId を含むもの）を貼り付けてください':'設定リンクか、Firebase の接続情報を貼り付けてください';drawSync();return}
-  if(!okGrp(g)){sy.err='合言葉は、英数字と - _ で8〜40文字にしてください';drawSync();return}
-  saveSetup(c,g);sy.edit=false;sy.draft=null;sy.gen=++syGen;loadSync()}
-function copySetup(){if(!isWeb()){sy.err='Webアドレスで開いていないので、設定リンクを作れません';drawSync();return}
-  copyText(setupLink(),'設定リンクをコピーしました',()=>showOut(setupLink(),'設定リンクです。コピーしてチームの人に送ってください。'))}
 function cfgText(c){return c?CFK.filter(k=>c[k]).map(k=>k+': "'+c[k]+'"').join('\n'):''}
+/* 決定。貼り付け欄には設定リンクか接続情報を入れる（設定リンクなら合言葉もそこから）。保存したら、つながるか確かめる */
+function setDB(){const t=$('scfg').value,st=readSetup(t);let c=st?st.c:parseCfg(t),g=st?st.g:$('sgin').value.trim();
+  ss.draft={t,g:$('sgin').value};ss.ok='';
+  if(!c){ss.err=t.trim()?'接続情報を読み取れませんでした。設定リンクか、Firebase の firebaseConfig（apiKey と projectId を含むもの）を貼り付けてください':'設定リンクか、Firebase の接続情報を貼り付けてください';drawSetDB();return}
+  if(!okGrp(g)){ss.err='合言葉は、英数字と - _ で8〜40文字にしてください';drawSetDB();return}
+  saveSetup(c,g);ss={};testDB()}
+async function testDB(){ss.busy=true;ss.err='';ss.ok='';drawSetDB();
+  try{const n=Object.keys(await fetchDocs()).length;ss.ok='データベースにつながりました（この合言葉の動画 '+n+' 本）'}
+  catch(e){ss.err=fbErr(e)+'。接続情報か合言葉が違うかもしれません。「変更」で直せます'}
+  ss.busy=false;drawSetDB()}
+function copySetup(){if(!isWeb()){ss.err='Webアドレスで開いていないので、設定リンクを作れません';drawSetDB();return}
+  copyText(setupLink(),'設定リンクをコピーしました',()=>{closeSet();showOut(setupLink(),'設定リンクです。コピーしてチームの人に送ってください。')})}
+function clearDB(){askConf('この端末のデータベースの設定（接続先と合言葉）を消しますか？\nこの端末の記録も、データベースの記録も消えません。もう一度使うときは、設定リンクを開き直してください。','設定を消す',
+  ()=>{try{localStorage.removeItem(CKEY);localStorage.removeItem(GKEY)}catch(e){}ss={};drawSetDB();toast('データベースの設定を消しました')})}
+function drawSetDB(){const c=cfg(),G=grp(),b=ss.busy?' disabled':'';let h='';
+  if(!c||!G||ss.edit)h=`<div class="note">チームの人から届いた<b>設定リンク</b>を開くか、ここに貼り付けてください。自分で Firebase を用意した人は、その接続情報（firebaseConfig）を貼り付けて、合言葉を決めてください（用意のしかたは下の「データベースの用意のしかた」）。</div>
+<textarea id="scfg" placeholder="設定リンク、または apiKey: &quot;…&quot;, projectId: &quot;…&quot; などの接続情報" autocomplete="off" autocapitalize="off" spellcheck="false">${esc(ss.draft?ss.draft.t:cfgText(c))}</textarea>
+<div class="note" style="margin-top:6px">合言葉（同じ合言葉の人どうしで記録を共有します。英数字と - _ で8〜40文字。設定リンクを貼ったときは入れなくてよい）</div>
+<div class="row" style="margin:4px 0 6px"><input id="sgin" value="${esc(ss.draft?ss.draft.g:G)}" placeholder="合言葉" autocomplete="off" autocapitalize="off" spellcheck="false"><button onclick="genGrp()" style="background:#333">作る</button></div>
+<div class="row" style="margin:0 0 4px">${c&&G?'<button onclick="ss={};drawSetDB()" style="flex:1;background:#333">やめる</button>':''}<button onclick="setDB()" style="flex:1;background:#2a5;font-weight:bold">決定</button></div>
+<div class="note">合言葉を変えると、前の合言葉で同期した記録はデータベース上で見えなくなります（この端末の記録は残るので、新しい合言葉で同期すれば送られます）。</div>`;
+  else h=`<div style="overflow-wrap:anywhere;font-size:14px">接続先：<b>${esc(c.projectId)}</b><br>合言葉：<b>${esc(G)}</b></div>
+<div class="row" style="margin:8px 0 4px"><button onclick="copySetup()" style="flex:1 1 100%;background:#345"${b}>設定リンクをコピー</button><button onclick="testDB()" style="flex:1;background:#333"${b}>接続確認</button><button onclick="ss={edit:true};drawSetDB()" style="flex:1;background:#333"${b}>変更</button><button onclick="clearDB()" style="flex:1;background:#533"${b}>設定を消す</button></div>
+<div class="note">設定リンクをチームの人に送ると、開くだけで同じ設定になります。合言葉が入っているので、チームの外には送らないでください。受け取った人は、開くのは最初の1回だけにして、次からはふつうのページのリンクで開いてください。</div>`;
+  h+=`<div class="note${ss.err?' vbad':''}" style="margin-top:6px${ss.ok?';color:#8e8':''}">${esc(ss.busy?'データベースにつながるか確認中…':ss.err||ss.ok||'')}</div>`;
+  $('setdb').innerHTML=h}
+/* データベースの用意のしかた: ルールはリポジトリの firestore.rules を読んで出す（中身を1か所にするため） */
+let rulesText='';
+async function loadRules(){if(rulesText)return;
+  try{const r=await fetch('firestore.rules',{cache:'no-cache'});if(!r.ok)throw 0;rulesText=await r.text();$('rules').textContent=rulesText;$('rcopy').disabled=false}
+  catch(e){$('rules').textContent='ルールを読み込めませんでした。このツールのリポジトリにある firestore.rules の中身を使ってください。'}}
 function syncPick(all){sy.sel=new Set(all?sy.vids.filter(v=>!syBlocked(v)):sy.vids.filter(v=>v===(vidNow()||cur.v)&&!syBlocked(v)));drawSync()}
 function drawSync(){if(!sy)return;const G=grp(),ready=sy.st==='ready',run=sy.st==='run';
   let gh='';
-  if(!hasCfg()||!G||sy.edit)gh=`<div class="note" style="margin-top:6px">チームの人から届いた<b>設定リンク</b>を開くか、ここに貼り付けてください。自分で Firebase を用意した人は、その接続情報（firebaseConfig）を貼り付けて、合言葉を決めてください。</div>
-<textarea id="scfg" placeholder="設定リンク、または apiKey: &quot;…&quot;, projectId: &quot;…&quot; などの接続情報" autocomplete="off" autocapitalize="off" spellcheck="false">${esc(sy.draft?sy.draft.t:cfgText(cfg()))}</textarea>
-<div class="note" style="margin-top:6px">合言葉（同じ合言葉の人どうしで記録を共有します。英数字と - _ で8〜40文字。設定リンクを貼ったときは入れなくてよい）</div>
-<div class="row" style="margin:4px 0 6px"><input id="sgin" value="${esc(sy.draft?sy.draft.g:G)}" placeholder="合言葉" autocomplete="off" autocapitalize="off" spellcheck="false"><button onclick="genGrp()" style="background:#333">作る</button></div>
-<div class="row" style="margin:0 0 4px">${hasCfg()&&G?'<button onclick="sy.edit=false;sy.err=\'\';sy.draft=null;drawSync()" style="flex:1;background:#333">やめる</button>':''}<button onclick="setGrp()" style="flex:1;background:#2a5;font-weight:bold">決定</button></div>
-<div class="note">合言葉を変えると、前の合言葉で同期した記録はデータベース上で見えなくなります（この端末の記録は残るので、新しい合言葉で同期すれば送られます）。</div>`;
-  else gh=`<div class="note" style="margin-top:6px;overflow-wrap:anywhere">接続先：<b style="color:#eee">${esc(cfg().projectId)}</b>　合言葉：<b style="color:#eee">${esc(G)}</b></div>
-<div class="row" style="margin:6px 0 2px"><button onclick="copySetup()" style="flex:1;background:#345"${run?' disabled':''}>設定リンクをコピー</button><button onclick="sy.edit=true;sy.err='';sy.draft=null;drawSync()" style="background:#333"${run?' disabled':''}>変更</button></div>
-<div class="note">設定リンクをチームの人に送ると、開くだけで同じ設定になります。合言葉が入っているので、チームの外には送らないでください。</div>`;
+  if(!hasCfg()||!G)gh=`<div class="note vbad" style="margin-top:6px">データベースの設定がまだありません。チームの人から届いた設定リンクを開くか、「設定」の「データベース」で設定してください。</div>
+<button onclick="closeSync();openSet('sdb')" style="width:100%;background:#2a5;font-weight:bold;margin:8px 0 0">設定を開く</button>`;
+  else gh=`<div class="row" style="align-items:center;margin:6px 0 4px"><span class="note" style="flex:1;min-width:0;overflow-wrap:anywhere">接続先：<b style="color:#eee">${esc(cfg().projectId)}</b>　合言葉：<b style="color:#eee">${esc(G)}</b></span><button onclick="closeSync();openSet('sdb')" style="background:#333;padding:6px 10px"${run?' disabled':''}>設定</button></div>`;
   $('sgrp').innerHTML=gh;
   $('sstat').className='note'+(sy.err?' vbad':'');
   $('sstat').textContent=sy.err||(sy.st==='load'?'データベースを読み込み中…':run?'同期中…':ready&&!sy.vids.length?'この端末にもデータベースにも、まだ記録がありません':'');
-  $('sbody').style.display=ready&&sy.vids.length&&!sy.edit?'block':'none';
+  $('sbody').style.display=ready&&sy.vids.length?'block':'none';
   const go=$('sgo');go.textContent=run?'同期中…':'同期する（'+sy.sel.size+'本）';
-  const can=ready&&!sy.edit&&sy.sel.size>0;go.disabled=!can;go.style.opacity=can?1:.5;
-  if(!ready||sy.edit)return;
+  const can=ready&&sy.sel.size>0;go.disabled=!can;go.style.opacity=can?1:.5;
+  if(!ready)return;
   const G4=['再生中の動画','この再生リストのほかの動画','ほかの動画','データベースにだけある動画'];
   let h='',sec='';
   sy.vids.forEach(v=>{const g=G4[sy.gOf(v)],d=sy.docs[v],bad=syBlocked(v);
