@@ -86,7 +86,19 @@ tr.new.cur td:first-child{box-shadow:inset 4px 0 #fc0,inset 8px 0 #39f}
 td.sc{white-space:nowrap;font-weight:bold}
 td.ty{word-break:keep-all}
 tr.set td{background:#123d3b;color:#7fe;font-weight:bold}
-.setbtn{width:100%;padding:12px;background:#0b7a75;font-weight:bold;margin:0 0 6px}
+.setrow{display:grid;grid-template-columns:1fr auto;gap:6px;margin:0 0 6px}
+.setbtn{width:100%;padding:12px 6px;background:#0b7a75;font-weight:bold}
+.setbtn small{font-size:11px;font-weight:normal;white-space:nowrap}
+.ptbtn{padding:12px 10px;background:#4a5a8a;font-weight:bold;white-space:nowrap}
+tr.pt td{background:#2a2f4a;color:#cdf}
+.scgrid{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:end;margin:6px 0 12px}
+.scgrid label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:#ccc;min-width:0}
+.scgrid label span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.scgrid input,#scset{width:100%;font-size:28px;font-weight:bold;text-align:center;background:#111;color:#eee;border:1px solid #555;padding:8px 4px}
+#scset{width:3.2em;font-size:20px;padding:4px}
+#mscore input::-webkit-inner-spin-button,#mscore input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+#mscore input{-moz-appearance:textfield}
+.scgrid .dash{font-size:28px;font-weight:bold;padding-bottom:10px}
 td textarea{display:block;width:100%;min-width:4em;padding:4px 6px;font-size:14px;line-height:1.4;font-family:inherit;resize:none;overflow:hidden;background:#fff;color:#000}
 .del{background:#500;padding:4px 10px}
 #out{display:none;margin-top:8px}
@@ -119,6 +131,14 @@ td textarea{display:block;width:100%;min-width:4em;padding:4px 6px;font-size:14p
 <div id="mtitle"></div>
 <input id="mmemo" placeholder="メモ（省略可）" autocomplete="off" enterkeyhint="done">
 <div class="row" style="margin:0"><button type="button" onclick="closeMemo(false)" style="flex:1">キャンセル</button><button type="submit" class="rv" style="flex:1;font-weight:bold">記録する</button></div>
+</form></div>
+<div id="mscore" class="modal"><form id="scform" class="mbox">
+<div class="mt">点数セット</div>
+<div id="sctime" class="note" style="margin:4px 0 8px"></div>
+<div class="row" style="align-items:center;gap:6px;margin:0 0 4px;font-size:15px">第<input id="scset" type="number" inputmode="numeric" min="1" max="9" step="1">セット</div>
+<div class="scgrid"><label><span id="scna"></span><input id="sca" type="number" inputmode="numeric" min="0" max="99" step="1"></label><span class="dash">-</span><label><span id="scnb"></span><input id="scb" type="number" inputmode="numeric" min="0" max="99" step="1"></label></div>
+<div id="scerr" class="note vbad" style="margin:-4px 0 8px"></div>
+<div class="row" style="margin:0"><button type="button" onclick="closeScore(false)" style="flex:1">キャンセル</button><button type="submit" style="flex:1;background:#4a5a8a;font-weight:bold">セットする</button></div>
 </form></div>
 <div id="mundo" class="modal"><div class="mbox">
 <div class="mt">この記録を取り消しますか？</div>
@@ -228,6 +248,7 @@ td textarea{display:block;width:100%;min-width:4em;padding:4px 6px;font-size:14p
 <li><b>注目スパイク</b>：注目したいスパイク</li>
 <li><b>見返したい</b>：動画が止まってメモの欄が出る。「記録する」で記録</li>
 <li><b>セット切替</b>：ここから次のセット</li>
+<li><b>点数セット</b>：今の点数とセットを入れる。試合の途中から始まる動画や、点数がずれたときに使う。押した時点からその点数で数え、すぐあとのサーブはその点数で始まる</li>
 <li><b>取り消す</b>：この動画で最後に記録したものを取り消す（確認が出る）</li>
 <li><b>コメント欄用にコピー</b>：YouTube のコメント欄に貼れる形でコピー。貼ると時刻がその場面へのリンクになる</li>
 </ul>
@@ -255,7 +276,7 @@ td textarea{display:block;width:100%;min-width:4em;padding:4px 6px;font-size:14p
 <ul>
 <li>セットは表の「第◯セット 開始」の行で区切られる。サーブを記録するたびにラリー番号が進む（記録ファイルの <code>rally</code> 列）</li>
 <li>「点数」はそのラリーが始まる時点の点数。セットの2本目以降のサーブは、サーブしたチームの1点として数える</li>
-<li>サーブを記録し忘れると、そこから点数がずれる</li>
+<li>サーブを記録し忘れると、そこから点数がずれる。「点数セット」で直せる</li>
 </ul>
 <h4>チーム名</h4>
 <p>チーム名は動画ごとに覚えます。まだ名前のない動画を開くと、再生リストで手前の動画の名前が入ります。</p>
@@ -340,7 +361,7 @@ td textarea{display:block;width:100%;min-width:4em;padding:4px 6px;font-size:14p
 <button class="sp" onclick="rec('注目スパイク')">注目スパイク</button>
 <button class="rv" onclick="askMemo()">見返したい</button>
 </div>
-<button class="setbtn" onclick="rec('セット開始')">セット切替（ここから次のセット）</button>
+<div class="setrow"><button class="setbtn" onclick="rec('セット開始')">セット切替<small>（ここから次のセット）</small></button><button class="ptbtn" onclick="askScore()">点数セット</button></div>
 <label class="lead">記録する時刻：ボタンを押した<select id="lead"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option></select>秒前</label>
 <button id="fold2" class="foldbtn" onclick="toggleFold(2)" aria-expanded="true"><span class="arr">▼</span><span class="ft">ボタンを隠す</span></button>
 </div>
@@ -531,7 +552,7 @@ function drawListDB(keep){const plt=getPLT(),sc=$('hlist').scrollTop;
   const ms=x=>x&&x.toMillis?x.toMillis():+x||0,docs=hdb.docs;
   const vs=Object.keys(docs).sort((a,b)=>ms(docs[b].updated_at)-ms(docs[a].updated_at));
   $('hnote').textContent='合言葉「'+grp()+'」でデータベースにある動画（新しく同期された順）。開いたあと「データベースと同期」で記録を取り込めます。';
-  $('hlist').innerHTML=vs.length?vs.map((v,i)=>{const d=docs[v],nd=(d.records||[]).filter(r=>r.type!=='セット開始').length,nl=L.filter(e=>e.v===v&&e.type!=='セット開始').length;
+  $('hlist').innerHTML=vs.length?vs.map((v,i)=>{const d=docs[v],nd=(d.records||[]).filter(r=>!isMark(r.type)).length,nl=L.filter(e=>e.v===v&&!isMark(e.type)).length;
     const sub=[fmtAt(ms(d.updated_at)),(d.team_a||'')+' vs '+(d.team_b||''),'データベース '+nd+'件',nl?'この端末 '+nl+'件':'この端末にはまだありません'].filter(Boolean).join('・');
     const pl=d.playlist_id?'再生リスト：'+(plt[d.playlist_id]||'（名前を取得できていません）'):'';
     return`<div class="hrow"><button class="hitem" data-i="${i}"><span>${esc(d.video_title||TT[v]||v)}</span>${pl?'<span class="pl">'+esc(pl)+'</span>':''}<span class="vsub">${esc(sub)}</span></button></div>`}).join(''):'<div class="note" style="padding:12px 4px">まだありません</div>';
@@ -540,7 +561,7 @@ function drawListDB(keep){const plt=getPLT(),sc=$('hlist').scrollTop;
   [...new Set(vs.map(v=>docs[v].playlist_id).filter(Boolean))].forEach(fetchPLT)}
 function openHist(keep){const h=getHist(),plt=getPLT(),sc=$('hlist').scrollTop;
   $('hnote').className='note';$('hnote').textContent='新しい順に最大100本まで。古いものは消えていることがあります（しばらく使わないと、ブラウザが保存データを消すことがあるため）。';
-  $('hlist').innerHTML=h.length?h.map((x,i)=>{const n=L.filter(e=>e.v===x.v&&e.type!=='セット開始').length;
+  $('hlist').innerHTML=h.length?h.map((x,i)=>{const n=L.filter(e=>e.v===x.v&&!isMark(e.type)).length;
     const sub=[fmtAt(x.at),TN[x.v]?vsText(x.v):'',n?n+'件':''].filter(Boolean).join('・');
     const pl=x.list?'再生リスト：'+(plt[x.list]||'（名前を取得できていません）'):'';
     return`<div class="hrow"><button class="hitem" data-i="${i}"><span>${esc(x.title||TT[x.v]||x.v)}</span>${pl?'<span class="pl">'+esc(pl)+'</span>':''}<span class="vsub">${esc(sub)}</span></button><button class="hdel" data-i="${i}" aria-label="一覧から消す">×</button></div>`}).join(''):'<div class="note" style="padding:12px 4px">まだありません</div>';
@@ -581,7 +602,7 @@ function plSync(){const sel=$('plsel');
   if(pl.join()!==plIds.join()){plIds=pl.slice();drawSel();fetchTitles(plIds)}
   else if(i>=0)sel.value=String(i)}
 function drawSel(){if(!plIds.length)return;const sel=$('plsel'),cnt={};let i=-1;
-  L.forEach(e=>{if(e.type!=='セット開始')cnt[e.v]=(cnt[e.v]||0)+1});
+  L.forEach(e=>{if(!isMark(e.type))cnt[e.v]=(cnt[e.v]||0)+1});
   try{i=P.getPlaylistIndex()}catch(e){}
   sel.innerHTML=plIds.map((v,k)=>{const t=TT[v]===undefined?'（タイトル読み込み中…）':TT[v]||'（タイトルを取得できません）';
     return`<option value="${k}">${k+1}. ${esc(t)}${cnt[v]?'　［'+cnt[v]+'件］':''}</option>`}).join('');
@@ -715,11 +736,11 @@ function leadSec(){return +$('lead').value||0}
 try{const x=localStorage.getItem('vt_lead');if(x!==null){const k=Math.min(10,Math.max(0,Math.round(+x)||0));$('lead').value=String(k)}}catch(e){}
 $('lead').onchange=()=>{try{localStorage.setItem('vt_lead',$('lead').value)}catch(e){}};
 /* 押した瞬間の動画・時刻を取る */
-function snap(){
+function snap(noLead){
   if(!ready||!P.getCurrentTime){msg('先に動画を読み込んでください');return null}
   const v=vidNow();if(!v){msg(cleared?'先に動画を読み込んでください':'動画が再生されていません');return null}
   syncNames();if(!TN[v])TN[v]=inNames();
-  const t=+Math.max(0,P.getCurrentTime()-leadSec()).toFixed(2);let pi=-1,title='';
+  const t=+Math.max(0,P.getCurrentTime()-(noLead?0:leadSec())).toFixed(2);let pi=-1,title='';
   try{title=P.getVideoData().title||'';if(cur.list)pi=P.getPlaylistIndex()}catch(e){}
   return{t,v,pi,title,list:cur.list}}
 /* 記録ごとの固有番号。CSVで人に渡しても同じ記録だとわかるようにする */
@@ -748,11 +769,45 @@ function closeMemo(ok){if(!pendRV)return;const p=pendRV;pendRV=null;
   resumePlay(p.resume)}
 $('mform').onsubmit=e=>{e.preventDefault();closeMemo(true)};
 document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;
-  if(pendConf)closeConf(false);else if($('mset').classList.contains('on'))closeSet();else if(pendRV)closeMemo(false);else if(pendUndo)closeUndo(false);else if($('mcopy').classList.contains('on'))closeCopy();else if(imp)closeImp();else if($('mexp').classList.contains('on'))closeExp();else if(histDel)closeHistDel('');else if($('mhist').classList.contains('on'))closeHist();else if($('mopen').classList.contains('on'))closeOpen();else if($('mfile').classList.contains('on'))closeFile();else if(sy&&sy.st!=='run')closeSync()});
+  if(pendConf)closeConf(false);else if(pendSC)closeScore(false);else if($('mset').classList.contains('on'))closeSet();else if(pendRV)closeMemo(false);else if(pendUndo)closeUndo(false);else if($('mcopy').classList.contains('on'))closeCopy();else if(imp)closeImp();else if($('mexp').classList.contains('on'))closeExp();else if(histDel)closeHistDel('');else if($('mhist').classList.contains('on'))closeHist();else if($('mopen').classList.contains('on'))closeOpen();else if($('mfile').classList.contains('on'))closeFile();else if(sy&&sy.st!=='run')closeSync()});
+/* ---------- 点数セット ----------
+   動画の途中から始まる試合や、セットが変わったところで、点数（とセット番号）を合わせる。
+   押した時点（再生位置そのまま）に「点数セット」の記録を入れ、そこからは入れた点数から数える。
+   すぐあとの最初のサーブはその点数で始まる（点を足さない）。2本目のサーブからは今までどおり。
+   点数は記録上の A・B（sa・sb）で持つ。入力欄は表示の左右の並び */
+const PT='点数セット';
+function isMark(t){return t==='セット開始'||t===PT}
+/* A・B を入れ替えた写し（点数セットは点数も入れ替える）。flipIn はその場で入れ替える */
+function flipRec(e){const o={...e,side:oside(e.side)};if(e.type===PT){o.sa=e.sb;o.sb=e.sa}return o}
+function flipIn(e){e.side=oside(e.side);if(e.type===PT){const x=e.sa;e.sa=e.sb;e.sb=x}}
+function ptText(e,i,C){C=C||calc();const v=e.v,l=lside(v),n=dispLR(v),a=C[i].a,b=C[i].b,L2=l==='A'?[a,b]:[b,a];
+  return n.a+' '+L2[0]+' - '+L2[1]+' '+n.b+'（第'+C[i].s+'セット）'}
+let pendSC=null;
+function askScore(){const sn=snap(true);if(!sn)return;
+  // 今の再生位置の直前の記録から、今の点数とセットを出しておく
+  const C=calc();let k=-1;L.forEach((e,i)=>{if(e.v===sn.v&&e.t<=sn.t)k=i});
+  const c=k>=0?C[k]:{s:1,a:'',b:''},a=+c.a||0,b=+c.b||0,l=lside(sn.v),n=dispLR(sn.v);
+  pendSC={sn,resume:holdPlay()};
+  $('sctime').textContent=fmt(sn.t)+' から、この点数で数えます（すぐあとのサーブはこの点数で始まります）';
+  $('scset').value=c.s;$('scna').textContent=n.a;$('scnb').textContent=n.b;
+  $('sca').value=l==='A'?a:b;$('scb').value=l==='A'?b:a;$('scerr').textContent='';
+  $('mscore').classList.add('on');$('sca').focus();$('sca').select()}
+function closeScore(ok){if(!pendSC)return;
+  if(ok){const iv=id=>{const x=$(id).value.trim();return/^\d{1,2}$/.test(x)?+x:-1};
+    const st=iv('scset'),x=iv('sca'),y=iv('scb');
+    if(st<1||x<0||y<0){$('scerr').textContent='セットは1〜99、点数は0〜99の数字で入れてください';return}
+    const p=pendSC,l=lside(p.sn.v);pendSC=null;$('mscore').classList.remove('on');document.activeElement.blur();
+    addOrder(p.sn.v,p.sn.pi);if(p.sn.title)TT[p.sn.v]=p.sn.title;if(!TN[p.sn.v])TN[p.sn.v]=inNames();
+    L.push({t:p.sn.t,type:PT,side:'',memo:'',sa:l==='A'?x:y,sb:l==='A'?y:x,sn:st,n:++seq,uid:newUid(),u:Date.now(),v:p.sn.v,pi:p.sn.pi>=0?p.sn.pi:-1,list:p.sn.list,title:p.sn.title});
+    sortL();draw();toast(fmt(p.sn.t)+' 点数 '+x+'-'+y+'（第'+st+'セット）');if(navigator.vibrate)navigator.vibrate(30);
+    resumePlay(p.resume);return}
+  const p=pendSC;pendSC=null;$('mscore').classList.remove('on');resumePlay(p.resume)}
+$('scform').onsubmit=e=>{e.preventDefault();closeScore(true)};
 /* 取り消す：最後に記録したものを、確認してから消す */
 let pendUndo=null;
 function recLabel(e,i){const C=calc();
   if(e.type==='セット開始')return fmt(e.t)+'　第'+C[i].s+'セット開始';
+  if(e.type===PT)return fmt(e.t)+'　点数セット　'+ptText(e,i,C);
   return fmt(e.t)+'　'+e.type+(e.side?'（'+tn(e.side,e.v)+'）':'')+(e.nc?'　前のラリーはノーカウント':'')+(e.memo.trim()?'　'+e.memo.trim():'')}
 function askUndo(){const vv=viewV();let k=-1;
   L.forEach((e,i)=>{if(e.v===vv&&(k<0||e.n>L[k].n))k=i});
@@ -766,10 +821,12 @@ function closeUndo(ok){if(!pendUndo)return;const p=pendUndo;pendUndo=null;$('mun
    （試合開始前に押しても第1セットのまま） */
 /* 点数（そのラリーが始まる時点の A-B）。ラリーに勝ったチームが次にサーブするので、
    セットの2本目以降のサーブは、サーブしたチームの1点として数える。サーブ以外の記録は直前のサーブと同じ点数 */
-function calc(){let s=1,r=0,pv=null,served=false,a=0,b=0;
-  return L.map(e=>{if(e.v!==pv){pv=e.v;s=1;r=0;served=false;a=b=0}
-    if(e.type==='セット開始'){if(served){s++;r=0;served=false;a=b=0}return{s,r:'',a:'',b:''}}
-    if(e.type==='サーブ'){if(served&&!e.nc){if(e.side==='A')a++;else if(e.side==='B')b++}r++;served=true}
+/* 点数セット: そこで点数（とセット番号）を置き換え、すぐあとの最初のサーブでは点を足さない（skip）。ラリー番号は点数の合計から続ける */
+function calc(){let s=1,r=0,pv=null,served=false,a=0,b=0,skip=false;
+  return L.map(e=>{if(e.v!==pv){pv=e.v;s=1;r=0;served=false;a=b=0;skip=false}
+    if(e.type==='セット開始'){if(served){s++;r=0;served=false;a=b=0;skip=false}return{s,r:'',a:'',b:''}}
+    if(e.type===PT){if(e.sn>0)s=e.sn;a=+e.sa||0;b=+e.sb||0;r=a+b;skip=true;if(a+b>0)served=true;return{s,r:'',a,b}}
+    if(e.type==='サーブ'){if(served&&!e.nc&&!skip){if(e.side==='A')a++;else if(e.side==='B')b++}skip=false;r++;served=true}
     return served?{s,r,a,b}:{s,r,a:'',b:''}})}
 let flt='';function setFlt(t){flt=t;draw()}
 let desc=true;try{desc=localStorage.getItem('vt_order')!=='asc'}catch(e){}
@@ -783,12 +840,13 @@ function draw(){
   const last=VL.length?Math.max(...VL.map(e=>e.n)):-1;
   const idx=L.map((e,i)=>i).filter(i=>L[i].v===vv);if(desc)idx.reverse();
   idx.forEach(i=>{const e=L[i],nw=e.n===last?' class="new"':'';
-    if(flt&&e.type!=='セット開始'&&e.type!==flt)return;  // 絞り込み中もセットの区切りは残す
+    if(flt&&!isMark(e.type)&&e.type!==flt)return;  // 絞り込み中もセットの区切り・点数セットは残す
     if(e.type==='セット開始'){h+=`<tr class="set${e.n===last?' new':''}" data-t="${e.t}" onclick="seek(${i})"><td>${fmt(e.t)}</td><td colspan="4">第${C[i].s}セット 開始</td><td>${del(i)}</td></tr>`;return}
+    if(e.type===PT){h+=`<tr class="pt${e.n===last?' new':''}" data-t="${e.t}" onclick="seek(${i})"><td>${fmt(e.t)}</td><td colspan="4">点数 ${esc(ptText(e,i,C))}</td><td>${del(i)}</td></tr>`;return}
     h+=`<tr${nw} data-t="${e.t}" onclick="seek(${i})"><td>${fmt(e.t)}</td><td class="sc">${C[i].a===''?'':lside(vv)==='A'?C[i].a+'-'+C[i].b:C[i].b+'-'+C[i].a}</td><td class="ty">${esc(e.type)}${e.nc?NCB:''}</td><td>${esc(tn(e.side,e.v))}</td><td style="width:45%"><textarea rows="1" onclick="event.stopPropagation()" onkeydown="memoKey(event,this)" oninput="memoIn(${i},this)">${esc(e.memo)}</textarea></td><td>${del(i)}</td></tr>`});
   $('list').innerHTML=h;$('list').querySelectorAll('textarea').forEach(fitMemo);
-  const cnt={};VL.forEach(e=>{if(e.type!=='セット開始')cnt[e.type]=(cnt[e.type]||0)+1});
-  const all=VL.filter(e=>e.type!=='セット開始').length,shown=flt?cnt[flt]||0:all;
+  const cnt={};VL.forEach(e=>{if(!isMark(e.type))cnt[e.type]=(cnt[e.type]||0)+1});
+  const all=VL.filter(e=>!isMark(e.type)).length,shown=flt?cnt[flt]||0:all;
   $('count').textContent=all?(flt?flt+' '+shown+'件 / この動画 '+all+'件':'この動画 '+all+'件'):'';
   const types=[...new Set(['サーブ','注目スパイク','見返したい',...Object.keys(cnt)])];
   $('flt').innerHTML=[['','すべて']].concat(types.map(t=>[t,t+' '+(cnt[t]||0)])).map(([t,l])=>
@@ -854,6 +912,7 @@ function showOut(text,note){$('csvtxt').value=text;$('outnote').textContent=note
 function commentText(v,sel){const C=calc(),out=[vsText(v)],st={};let ps=0,n=0;
   L.forEach((e,i)=>{if(e.v!==v)return;const s=C[i].s;
     if(e.type==='セット開始'){if(!(s in st))st[s]=e.t;return}
+    if(e.type===PT)return;
     if(!sel.has(e.n))return;
     if(s!==ps){out.push('',s in st?fmt(st[s])+' ━━ 第'+s+'セット開始 ━━':'━━ 第'+s+'セット ━━');ps=s}
     const m=e.memo.trim();n++;
@@ -867,10 +926,10 @@ function cOff(){try{return JSON.parse(localStorage.getItem('vt_coff')||'[]')}cat
 function copyComment(){if(!L.length){msg('まだ記録がありません');return}
   const vs=[...new Set(L.map(e=>e.v))];let v=vidNow();
   if(!vs.includes(v)){if(vs.length===1)v=vs[0];else{msg('この動画の記録がありません');return}}
-  cV=v;const off=cOff();cSel=new Set(cRecs().filter(x=>x.e.type!=='セット開始'&&!off.includes(x.e.type)).map(x=>x.e.n));
+  cV=v;const off=cOff();cSel=new Set(cRecs().filter(x=>!isMark(x.e.type)&&!off.includes(x.e.type)).map(x=>x.e.n));
   cEach=false;$('cvid').textContent=(TT[v]||v)+'　'+vsText(v);
   drawCopy();$('mcopy').classList.add('on')}
-function drawCopy(){const R=cRecs().filter(x=>x.e.type!=='セット開始'),C=calc(),types=[...new Set(R.map(x=>x.e.type))];
+function drawCopy(){const R=cRecs().filter(x=>!isMark(x.e.type)),C=calc(),types=[...new Set(R.map(x=>x.e.type))];
   $('ctypes').innerHTML=types.map((t,k)=>{const all=R.filter(x=>x.e.type===t),on=all.filter(x=>cSel.has(x.e.n)).length;
     return`<label><input type="checkbox" data-k="${k}" ${on===all.length?'checked':''}>${esc(t)}<span class="note">（${on}/${all.length}件）</span></label>`}).join('');
   $('ctypes').querySelectorAll('input').forEach(inp=>{const t=types[+inp.dataset.k],all=R.filter(x=>x.e.type===t),on=all.filter(x=>cSel.has(x.e.n)).length;
@@ -878,14 +937,14 @@ function drawCopy(){const R=cRecs().filter(x=>x.e.type!=='セット開始'),C=ca
     inp.onchange=()=>{all.forEach(x=>inp.checked?cSel.add(x.e.n):cSel.delete(x.e.n));drawCopy()}});
   $('ceach').textContent=cEach?'一つずつ選ぶ ▲':'一つずつ選ぶ ▼';$('clist').style.display=cEach?'block':'none';
   if(cEach){let h='',ps=0;
-    cRecs().forEach(({e,i})=>{const s=C[i].s;if(s!==ps){h+=`<div class="cset">第${s}セット</div>`;ps=s}if(e.type==='セット開始')return;
+    cRecs().forEach(({e,i})=>{const s=C[i].s;if(s!==ps){h+=`<div class="cset">第${s}セット</div>`;ps=s}if(isMark(e.type))return;
       h+=`<label><input type="checkbox" data-n="${e.n}" ${cSel.has(e.n)?'checked':''}><span class="ct">${fmt(e.t)}</span><span>${esc(e.type)}${e.side?'（'+esc(tn(e.side,e.v))+'）':''}${e.nc?NCB:''}${e.memo.trim()?' <span class="note">'+esc(e.memo.trim())+'</span>':''}</span></label>`});
     const sc=$('clist').scrollTop;$('clist').innerHTML=h;$('clist').scrollTop=sc;
     $('clist').querySelectorAll('input').forEach(inp=>inp.onchange=()=>{const n=+inp.dataset.n;inp.checked?cSel.add(n):cSel.delete(n);drawCopy()})}
   const n=R.filter(x=>cSel.has(x.e.n)).length;$('cgo').textContent='コピー（'+n+'件）';$('cgo').disabled=!n;$('cgo').style.opacity=n?1:.5}
 function toggleEach(){cEach=!cEach;drawCopy()}
 function closeCopy(){$('mcopy').classList.remove('on')}
-function doCopy(){const R=cRecs().filter(x=>x.e.type!=='セット開始');
+function doCopy(){const R=cRecs().filter(x=>!isMark(x.e.type));
   const off=[...new Set(R.map(x=>x.e.type))].filter(t=>!R.some(x=>x.e.type===t&&cSel.has(x.e.n)));
   try{localStorage.setItem('vt_coff',JSON.stringify(off))}catch(e){}
   const r=commentText(cV,cSel);if(!r.n)return;closeCopy();
@@ -912,13 +971,13 @@ function exportCSV(){if(!L.length){msg('まだ記録がありません');return}
   eSel=new Set(eVids.includes(now)?[now]:eVids.length===1?eVids:[]);
   drawExp();$('mexp').classList.add('on')}
 function drawExp(){const now=vidNow();let h='',sec='';
-  eVids.forEach(v=>{const R=L.filter(e=>e.v===v),e0=R[0],n=R.filter(e=>e.type!=='セット開始').length;
+  eVids.forEach(v=>{const R=L.filter(e=>e.v===v),e0=R[0],n=R.filter(e=>!isMark(e.type)).length;
     const g=v===now?'再生中の動画':cur.list&&R.some(e=>e.list===cur.list)?'この再生リストのほかの動画':'ほかの動画';
     if(g!==sec){h+=`<div class="cset">${g}</div>`;sec=g}
     h+=`<label><input type="checkbox" data-v="${esc(v)}" ${eSel.has(v)?'checked':''}><span>${e0.pi>=0?(e0.pi+1)+'本目　':''}${esc(TT[v]||e0.title||v)}<span class="vsub">${esc(vsText(v))}・${n}件</span></span></label>`});
   const sc=$('evids').scrollTop;$('evids').innerHTML=h;$('evids').scrollTop=sc;
   $('evids').querySelectorAll('input').forEach(inp=>inp.onchange=()=>{inp.checked?eSel.add(inp.dataset.v):eSel.delete(inp.dataset.v);drawExp()});
-  const n=L.filter(e=>eSel.has(e.v)&&e.type!=='セット開始').length;
+  const n=L.filter(e=>eSel.has(e.v)&&!isMark(e.type)).length;
   $('ego').textContent='書き出す（'+eSel.size+'本・'+n+'件）';$('ego').disabled=!eSel.size;$('ego').style.opacity=eSel.size?1:.5}
 function expPick(all){eSel=new Set(all?eVids:eVids.filter(v=>v===vidNow()));drawExp()}
 function closeExp(){$('mexp').classList.remove('on')}
@@ -952,9 +1011,10 @@ let imp=null;
 const TLABEL=t=>t==='セット開始'?'セット切替':t;
 /* sw: この動画のA・Bを入れ替えて取り込むとき true（今の記録のA・Bを入れ替えて比べる） */
 function findDup(e,sw){if(e.uid){const u=L.find(x=>x.uid===e.uid);if(u)return u}
-  return L.find(x=>x.v===e.v&&x.type===e.type&&nearDup(sw?{...x,side:oside(x.side)}:x,e))}
+  return L.find(x=>x.v===e.v&&x.type===e.type&&nearDup(sw?flipRec(x):x,e))}
 /* 同じ動画・同じ種類の2つの記録が、同じ場面を別々に記録したものかどうか（記録ファイル読み込みと同期で共通） */
 function nearDup(x,e){const d=Math.abs(x.t-e.t);
+  if(e.type===PT)return d<3&&+x.sa===+e.sa&&+x.sb===+e.sb;  // 3秒以内で同じ点数
   if(e.type==='サーブ')return x.side===e.side&&d<6;
   if(e.type==='セット開始')return d<300;
   if(d>=1||x.side!==e.side)return false;
@@ -997,7 +1057,8 @@ function importCSV(inp){const file=inp.files[0];if(!file)return;const fr=new Fil
       if(g('team_a'))o.a=g('team_a');if(g('team_b'))o.b=g('team_b');
       if((sd==='a'||sd==='b')&&!o[sd]&&g('serve_team'))o[sd]=g('serve_team');
       const pi=g('playlist_index')?(+g('playlist_index')-1):-1;
-      return{t:+g('seconds')||0,type:g('type'),side:g('serve_side'),memo:g('memo'),v:g('video_id'),pi,list:g('playlist_id'),title:g('video_title'),uid:g('record_id'),nc:g('no_count')==='1'}})
+      const rc={t:+g('seconds')||0,type:g('type'),side:g('serve_side'),memo:g('memo'),v:g('video_id'),pi,list:g('playlist_id'),title:g('video_title'),uid:g('record_id'),nc:g('no_count')==='1'};
+      if(rc.type===PT){rc.sa=+g('score_a')||0;rc.sb=+g('score_b')||0;rc.sn=+g('set')||0}return rc})
       .filter(e=>e.type&&e.v);
     if(!recs.length)throw 0;
     // 自分で付けた名前とCSVの名前が違う動画。どちらの向きが近いかを文字の重なりで推測しておく
@@ -1024,11 +1085,11 @@ function doImp(){if(!imp)return;const fileV=[...new Set(imp.recs.map(e=>e.v))];
   imp.recs.forEach(e=>{if(imp.on.has(e.type)&&e.dup&&e.nc&&!e.dup.nc){e.dup.nc=true;e.dup.u=Date.now()}});
   // チーム名の対応: 記録上の名前とA・BをCSVに合わせ、自分の表示名と左右の並びは VW に残す
   Object.keys(imp.map).forEach(v=>{const sw=imp.map[v];
-    if(sw)L.forEach(e=>{if(e.v===v)e.side=oside(e.side)});adoptNames(v,sw,imp.nm[v])});
+    if(sw)L.forEach(e=>{if(e.v===v)flipIn(e)});adoptNames(v,sw,imp.nm[v])});
   add.forEach(e=>{if(!TN[e.v]){const o=imp.nm[e.v]||{};TN[e.v]={a:o.a||d.a,b:o.b||d.b}}
     addOrder(e.v,e.pi);if(e.title&&!TT[e.v])TT[e.v]=e.title;
     // 消した記録をファイルから戻すときは、新しい記録として扱う（同期で消した印に負けないように）
-    L.push({t:e.t,type:e.type,side:e.side,memo:e.memo,nc:e.nc||undefined,n:++seq,uid:e.uid&&!isDel(e.v,e.uid)?e.uid:newUid(),u:0,v:e.v,pi:e.pi,list:e.list,title:e.title})});
+    L.push({t:e.t,type:e.type,side:e.side,memo:e.memo,nc:e.nc||undefined,...(e.type===PT?{sa:e.sa,sb:e.sb,sn:e.sn}:{}),n:++seq,uid:e.uid&&!isDel(e.v,e.uid)?e.uid:newUid(),u:0,v:e.v,pi:e.pi,list:e.list,title:e.title})});
   closeImp();sortL();shownV='';draw();
   syncNames();toast(add.length+'件追加しました'+(fills.length?'（メモ '+fills.length+'件）':''));
   const vv=viewV(),other=add.filter(e=>e.v!==vv),ov=new Set(other.map(e=>e.v)).size;
@@ -1037,7 +1098,7 @@ function doImp(){if(!imp)return;const fileV=[...new Set(imp.recs.map(e=>e.v))];
   if(!fileV.includes(vidNow()))askOpen(fileV)}
 function askOpen(vs){
   $('onote').textContent='読み込んだ記録は、'+(vidNow()?'今見ている動画とは別の':'')+'動画のものです。'+(vs.length>1?'開く動画を選んでください。':'開きますか？');
-  $('olist').innerHTML=vs.map((v,i)=>{const e=L.find(x=>x.v===v)||{},n=L.filter(x=>x.v===v&&x.type!=='セット開始').length;
+  $('olist').innerHTML=vs.map((v,i)=>{const e=L.find(x=>x.v===v)||{},n=L.filter(x=>x.v===v&&!isMark(x.type)).length;
     return`<button class="obtn" data-i="${i}">${vs.length>1?'':'開く：'}${esc(TT[v]||e.title||v)}<span class="vsub" style="color:#dfe">${TN[v]?esc(vsText(v))+'・':''}${n}件</span></button>`}).join('');
   $('olist').querySelectorAll('.obtn').forEach(b=>b.onclick=()=>{const v=vs[+b.dataset.i],e=L.find(x=>x.v===v)||{};closeOpen();msg('');openVideo(v,e.list)});
   $('mopen').classList.add('on')}
@@ -1058,7 +1119,7 @@ function closeOpen(){$('mopen').classList.remove('on')}
      （送ってしまうと、受け取る人がチーム名の対応を付けられないため）
    - データベースにすでにある動画は、データベースのチーム名とA・Bに合わせる（違えば「チーム名の対応」で選ぶ）
    - 選ばなかった種類の記録は、データベースのもこの端末のもそのまま */
-const GKEY='vt_group',CKEY='vt_fb',FBV='10.14.1',TORD=['サーブ','注目スパイク','見返したい','セット開始'];
+const GKEY='vt_group',CKEY='vt_fb',FBV='10.14.1',TORD=['サーブ','注目スパイク','見返したい','セット開始','点数セット'];
 let FB=null,sy=null,syGen=0;
 function grp(){try{return localStorage.getItem(GKEY)||''}catch(e){return''}}
 function okGrp(s){return/^[A-Za-z0-9_-]{8,40}$/.test(s)}
@@ -1099,9 +1160,11 @@ function fbErr(e){const c=String(e&&(e.code||e.message)||e||'');
   if(e instanceof TypeError)return'データベースの部品を読み込めませんでした（通信を確認してください）';
   return'データベースでエラーが起きました（'+c+'）'}
 /* データベースの1件 ⇔ この端末の1件。列名は記録ファイル（CSV）と同じ */
-function toDB(e){return{record_id:e.uid,seconds:e.t,type:e.type,serve_side:e.side||'',memo:e.memo||'',no_count:!!e.nc,updated_at:e.u||0}}
+function toDB(e){return{record_id:e.uid,seconds:e.t,type:e.type,serve_side:e.side||'',memo:e.memo||'',no_count:!!e.nc,updated_at:e.u||0,
+  ...(e.type===PT?{score_a:+e.sa||0,score_b:+e.sb||0,set:+e.sn||0}:{})}}
 function fromDB(r,d,v){return{t:+r.seconds||0,type:String(r.type||''),side:String(r.serve_side||''),memo:String(r.memo||''),nc:r.no_count?true:undefined,
-  uid:String(r.record_id||''),u:+r.updated_at||0,v,pi:d.playlist_index>0?d.playlist_index-1:-1,list:d.playlist_id||'',title:d.video_title||''}}
+  uid:String(r.record_id||''),u:+r.updated_at||0,v,pi:d.playlist_index>0?d.playlist_index-1:-1,list:d.playlist_id||'',title:d.video_title||'',
+  ...(r.type===PT?{sa:+r.score_a||0,sb:+r.score_b||0,sn:+r.set||0}:{})}}
 function canon(x){return Array.isArray(x)?'['+x.map(canon).join()+']':x&&typeof x==='object'?'{'+Object.keys(x).sort().map(k=>JSON.stringify(k)+':'+canon(x[k])).join()+'}':JSON.stringify(x)}
 /* 1本の動画のマージ。loc: この端末の記録（データベースのA・Bの向きにそろえた写し）、d: データベースのドキュメント（なければ null）、
    S: 同期する種類（S.has(種類)）、myDel: この端末で消した記録の record_id。
@@ -1113,7 +1176,7 @@ function mergeV(v,loc,d,S,myDel){
   loc.forEach(e=>{if(del.has(e.uid)){rmLoc++;return}out.push(e)});
   const ruid=new Set(R.map(r=>r.uid)),used=new Set(),byUid={};out.forEach(e=>byUid[e.uid]=e);
   R.forEach(r=>{if(!S.has(r.type))return;let l=byUid[r.uid];
-    if(l){used.add(l);if(r.u>(l.u||0))Object.assign(l,{t:r.t,type:r.type,side:r.side,memo:r.memo,nc:r.nc,u:r.u});return}
+    if(l){used.add(l);if(r.u>(l.u||0))Object.assign(l,{t:r.t,type:r.type,side:r.side,memo:r.memo,nc:r.nc,u:r.u},r.type===PT?{sa:r.sa,sb:r.sb,sn:r.sn}:{});return}
     l=out.find(e=>!used.has(e)&&!ruid.has(e.uid)&&e.type===r.type&&nearDup(e,r));
     if(l){used.add(l);let ch=false;const a=l.memo.trim(),b=r.memo.trim();
       if(b&&!a.includes(b)){l.memo=a?a+' / '+b:b;ch=true}
@@ -1126,7 +1189,7 @@ function mergeV(v,loc,d,S,myDel){
   recs.sort((a,b)=>a.t-b.t);
   return{loc:out,recs,del:[...del],st,rmDB,rmLoc}}
 const ALLT={has:()=>true};
-function syLoc(v,flip){return L.filter(e=>e.v===v).map(e=>flip?{...e,side:oside(e.side)}:{...e})}
+function syLoc(v,flip){return L.filter(e=>e.v===v).map(e=>flip?flipRec(e):{...e})}
 function syBlocked(v){return!sy.docs[v]&&needNames(TN[v])}
 function syTitle(v){const e=L.find(x=>x.v===v),d=sy&&sy.docs[v];return TT[v]||(e&&e.title)||(d&&d.video_title)||v}
 function openSync(){sy={st:'',gen:++syGen,docs:{},sel:new Set(),off:new Set(),map:{},nm:{},vids:[],err:''};
@@ -1205,7 +1268,7 @@ function drawSync(){if(!sy)return;const G=grp(),ready=sy.st==='ready',run=sy.st=
   let h='',sec='';
   sy.vids.forEach(v=>{const g=G4[sy.gOf(v)],d=sy.docs[v],bad=syBlocked(v);
     if(g!==sec){h+=`<div class="cset">${g}</div>`;sec=g}
-    const nl=L.filter(e=>e.v===v&&e.type!=='セット開始').length,nd=d?(d.records||[]).filter(r=>r.type!=='セット開始').length:0;
+    const nl=L.filter(e=>e.v===v&&!isMark(e.type)).length,nd=d?(d.records||[]).filter(r=>!isMark(r.type)).length:0;
     const names=TN[v]?vsText(v):d?d.team_a+' vs '+d.team_b:'';
     h+=`<label class="${bad?'off':''}"><input type="checkbox" data-v="${esc(v)}" ${sy.sel.has(v)?'checked':''} ${bad?'disabled':''}><span>${esc(syTitle(v))}<span class="vsub">${esc(names)}・この端末 ${nl}件・データベース ${d?nd+'件':'なし'}</span>${bad?'<span class="vsub vbad">チーム名が初期のまま（Aチーム・Bチーム）なので送れません。チーム名を入れてから同期してください</span>':''}</span></label>`});
   const sc=$('svids').scrollTop;$('svids').innerHTML=h;$('svids').scrollTop=sc;
@@ -1238,7 +1301,7 @@ async function syncOne(f,db,v,S,sw){const ref=f.doc(db,'groups',grp(),'videos',v
   const{r,names,fl,snap}=out,tomb=new Set(r.del);
   adoptNames(v,fl,names);
   L=L.filter(e=>e.v!==v||(!snap.has(e.uid)&&!tomb.has(e.uid)));
-  if(fl)L.forEach(e=>{if(e.v===v)e.side=oside(e.side)});
+  if(fl)L.forEach(e=>{if(e.v===v)flipIn(e)});
   r.loc.forEach(e=>{if(!e.n)e.n=++seq;L.push(e)});
   if(r.del.length)DEL[v]=r.del;
   const e0=r.loc[0];if(e0){addOrder(v,e0.pi);if(e0.title&&!TT[v])TT[v]=e0.title}
