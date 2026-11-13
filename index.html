@@ -88,7 +88,6 @@ td.ty{word-break:keep-all}
 tr.set td{background:#123d3b;color:#7fe;font-weight:bold}
 .setrow{display:grid;grid-template-columns:1fr auto;gap:6px;margin:0 0 6px}
 .setbtn{width:100%;padding:12px 6px;background:#0b7a75;font-weight:bold}
-.setbtn small{font-size:11px;font-weight:normal;white-space:nowrap}
 .ptbtn{padding:12px 10px;background:#4a5a8a;font-weight:bold;white-space:nowrap}
 tr.pt td{background:#2a2f4a;color:#cdf}
 .scgrid{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:end;margin:6px 0 12px}
@@ -247,12 +246,12 @@ td textarea{display:block;width:100%;min-width:4em;padding:4px 6px;font-size:14p
 <li><b>サーブ</b>：どちらのチームのサーブか。押すたびにラリー番号が1つ進む。<b>ダブルタップ</b>すると「前のラリーはノーカウント」として記録し、前のラリーの点をどちらにも足さない</li>
 <li><b>注目スパイク</b>：注目したいスパイク</li>
 <li><b>見返したい</b>：動画が止まってメモの欄が出る。「記録する」で記録</li>
-<li><b>セット切替</b>：ここから次のセット</li>
+<li><b>セット切り替え記録</b>：ここから次のセット</li>
 <li><b>点数セット</b>：今の点数とセットを入れる。試合の途中から始まる動画や、点数がずれたときに使う。押した時点からその点数で数え、すぐあとのサーブはその点数で始まる</li>
 <li><b>取り消す</b>：この動画で最後に記録したものを取り消す（確認が出る）</li>
 <li><b>コメント欄用にコピー</b>：YouTube のコメント欄に貼れる形でコピー。貼ると時刻がその場面へのリンクになる</li>
 </ul>
-<p>記録する時刻は、ボタンを押した時刻の3秒前です（プレーを見てから押すまでの遅れの分）。セット切替のボタンの下の「記録する時刻」で0〜10秒から選べます。</p>
+<p>記録する時刻は、ボタンを押した時刻の3秒前です（プレーを見てから押すまでの遅れの分）。「セット切り替え記録」のボタンの下の「記録する時刻」で0〜10秒から選べます。</p>
 <h4>動画のタップ操作</h4>
 <ul>
 <li>左側をダブルタップで10秒戻す、右側をダブルタップで10秒進める（続けてタップするとさらに10秒ずつ）</li>
@@ -262,7 +261,7 @@ td textarea{display:block;width:100%;min-width:4em;padding:4px 6px;font-size:14p
 <li>再生リストでは、動画が終わっても次の動画には進まず、終わりで止まります。進ませたいときは、「動画プレーヤーの設定」で「再生リストの自動再生」をオンにしてください</li>
 </ul>
 <h4>ボタンを隠す</h4>
-<p>「▼ ボタンを隠す」で記録用のボタンを隠せます（隠すと「▶ ボタンを表示する」になり、押すと出ます）。動画の下のものはサーブ・注目スパイク・見返したい・セット切替・記録する時刻と、その下のボタンをまとめて隠します。記録する時刻の下のものは、取り消す・コメント欄用にコピー・記録ファイル読み書き・データベースと同期だけを隠します。隠した分だけ、記録の表までのスクロールが短くなります。</p>
+<p>「▼ ボタンを隠す」で記録用のボタンを隠せます（隠すと「▶ ボタンを表示する」になり、押すと出ます）。動画の下のものはサーブ・注目スパイク・見返したい・セット切り替え記録・点数セット・記録する時刻と、その下のボタンをまとめて隠します。記録する時刻の下のものは、取り消す・コメント欄用にコピー・記録ファイル読み書き・データベースと同期だけを隠します。隠した分だけ、記録の表までのスクロールが短くなります。</p>
 <h4>記録の表</h4>
 <ul>
 <li>ページをいちばん下までスクロールすると、「新しい順」の行が画面のいちばん上に来て、表が画面の下まで広がる。表は中をスクロールできる（見出しの行は上に残る）</li>
@@ -361,7 +360,7 @@ td textarea{display:block;width:100%;min-width:4em;padding:4px 6px;font-size:14p
 <button class="sp" onclick="rec('注目スパイク')">注目スパイク</button>
 <button class="rv" onclick="askMemo()">見返したい</button>
 </div>
-<div class="setrow"><button class="setbtn" onclick="rec('セット開始')">セット切替<small>（ここから次のセット）</small></button><button class="ptbtn" onclick="askScore()">点数セット</button></div>
+<div class="setrow"><button class="setbtn" onclick="rec('セット開始')">セット切り替え記録</button><button class="ptbtn" onclick="askScore()">点数セット</button></div>
 <label class="lead">記録する時刻：ボタンを押した<select id="lead"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option></select>秒前</label>
 <button id="fold2" class="foldbtn" onclick="toggleFold(2)" aria-expanded="true"><span class="arr">▼</span><span class="ft">ボタンを隠す</span></button>
 </div>
@@ -855,7 +854,7 @@ function draw(){
   drawSel();save();markCur(true);
 }
 /* ---------- 記録用のボタンを隠す ----------
-   1（動画の下）: サーブ・注目スパイク・見返したい・セット切替・記録する時刻（grp1）。隠すと、下の取り消しなど（grp2）も一緒に隠す。出すと両方出す
+   1（動画の下）: サーブ・注目スパイク・見返したい・セット切り替え記録・点数セット・記録する時刻（grp1）。隠すと、下の取り消しなど（grp2）も一緒に隠す。出すと両方出す
    2（記録する時刻の下。grp1 の中なので 1 で隠すと一緒に隠れる）: 取り消す・コメント欄用にコピー・記録ファイル読み書き・データベースと同期（grp2）だけ
    出ているときは「▼ ボタンを隠す」、隠しているときは「▶ ボタンを表示する」。状態はブラウザが覚える。隠した分だけ記録の表までのスクロールが短くなる */
 let fold={a:true,b:true};
