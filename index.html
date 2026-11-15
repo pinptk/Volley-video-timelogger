@@ -287,6 +287,7 @@ td textarea{display:block;width:100%;min-width:4em;padding:4px 6px;font-size:14p
 <li>同期する動画と記録の種類を選んで「同期する」。データベースの記録を取り込み、この端末の記録を送る</li>
 <li>ほかの人が記録した同じ場面（6秒以内の同じチームのサーブなど）は1つにまとめる</li>
 <li>チーム名が「Aチーム」「Bチーム」のままの動画は、データベースにまだ無ければ送れない</li>
+<li>メモを書き換えると、同期でほかの人にも伝わる。前回の同期のあとに、自分とほかの人の両方が同じ記録のメモを書き換えていたときは「データベースのメモ / 自分のメモ」とつなげて残す</li>
 <li>記録を消すと、同期したときにデータベースとほかの人の端末からも消える</li>
 </ul>
 <h4>記録ファイル（CSV）</h4>
@@ -1168,14 +1169,28 @@ function canon(x){return Array.isArray(x)?'['+x.map(canon).join()+']':x&&typeof 
 /* 1本の動画のマージ。loc: この端末の記録（データベースのA・Bの向きにそろえた写し）、d: データベースのドキュメント（なければ null）、
    S: 同期する種類（S.has(種類)）、myDel: この端末で消した記録の record_id。
    戻り値 loc: この端末の新しい記録、recs: データベースの新しい記録、del: 消した記録、st[種類]={send,recv}: 送る・受け取る件数 */
+/* 同じ記録のメモの合わせ方。a: この端末のメモ、b: データベースのメモ、base: 前回の同期でデータベースとそろえたときのメモ（bm）。
+   - データベースが前回から変わっていなければ、この端末のメモ（書き換えていればそれ）
+   - この端末が前回から変わっていなければ、データベースのメモ
+   - 両方変わっていたら（誰かが同期のあいだに書き換えていた）「データベースのメモ / この端末のメモ」とつなげる。
+     片方がもう片方を含むとき（書き足しただけなど）は長い方。前回のメモがわからない記録（この仕組みより前に同期したもの）もこちら */
+function mergeMemo(a,b,base){a=a||'';b=b||'';if(a===b)return a;
+  if(base!==undefined&&base!==null){if(b===base)return a;if(a===base)return b}
+  const x=a.trim(),y=b.trim();if(!x)return b;if(!y)return a;
+  if(x.includes(y))return a;if(y.includes(x))return b;
+  return y+' / '+x}
 function mergeV(v,loc,d,S,myDel){
   const del=new Set([...(myDel||[]),...((d&&d.deleted)||[])]),st={},cnt=(t,k)=>{(st[t]=st[t]||{send:0,recv:0})[k]++};
-  let rmDB=0,rmLoc=0;const R=[],out=[];
+  let rmDB=0,rmLoc=0,joined=0;const R=[],out=[];
   ((d&&d.records)||[]).forEach(r=>{const x=fromDB(r,d,v);if(!x.uid||!x.type)return;if(del.has(x.uid)){rmDB++;return}R.push(x)});
   loc.forEach(e=>{if(del.has(e.uid)){rmLoc++;return}out.push(e)});
   const ruid=new Set(R.map(r=>r.uid)),used=new Set(),byUid={};out.forEach(e=>byUid[e.uid]=e);
   R.forEach(r=>{if(!S.has(r.type))return;let l=byUid[r.uid];
-    if(l){used.add(l);if(r.u>(l.u||0))Object.assign(l,{t:r.t,type:r.type,side:r.side,memo:r.memo,nc:r.nc,u:r.u},r.type===PT?{sa:r.sa,sb:r.sb,sn:r.sn}:{});return}
+    if(l){used.add(l);
+      // メモは前回の同期のメモと比べて合わせる。ほかの項目（時刻・サーブ側・ノーカウントなど）は、あとで書き換えた方
+      const m=mergeMemo(l.memo,r.memo,l.bm),mine=l.memo;
+      if(r.u>(l.u||0))Object.assign(l,{t:r.t,type:r.type,side:r.side,nc:r.nc,u:r.u},r.type===PT?{sa:r.sa,sb:r.sb,sn:r.sn}:{});
+      l.memo=m;if(m!==mine&&m!==r.memo){joined++;l.u=Date.now()}return}
     l=out.find(e=>!used.has(e)&&!ruid.has(e.uid)&&e.type===r.type&&nearDup(e,r));
     if(l){used.add(l);let ch=false;const a=l.memo.trim(),b=r.memo.trim();
       if(b&&!a.includes(b)){l.memo=a?a+' / '+b:b;ch=true}
@@ -1186,7 +1201,9 @@ function mergeV(v,loc,d,S,myDel){
   const recs=R.map(r=>lu[r.uid]||r);
   out.forEach(e=>{if(S.has(e.type)&&!ruid.has(e.uid)){recs.push(e);cnt(e.type,'send')}});
   recs.sort((a,b)=>a.t-b.t);
-  return{loc:out,recs,del:[...del],st,rmDB,rmLoc}}
+  // データベースに書く記録は、今のメモを「前回の同期のメモ」として覚えておく（この端末に残す写しだけ。データベースには書かない）
+  out.forEach(e=>{if(S.has(e.type))e.bm=e.memo});
+  return{loc:out,recs,del:[...del],st,rmDB,rmLoc,joined}}
 const ALLT={has:()=>true};
 function syLoc(v,flip){return L.filter(e=>e.v===v).map(e=>flip?flipRec(e):{...e})}
 function syBlocked(v){return!sy.docs[v]&&needNames(TN[v])}
@@ -1274,15 +1291,18 @@ function drawSync(){if(!sy)return;const G=grp(),ready=sy.st==='ready',run=sy.st=
   $('svids').querySelectorAll('input').forEach(inp=>inp.onchange=()=>{inp.checked?sy.sel.add(inp.dataset.v):sy.sel.delete(inp.dataset.v);drawSync()});
   drawMap($('smap'),Object.keys(sy.map).filter(v=>sy.sel.has(v)),sy.map,sy.nm,'データベース',syTitle,drawSync);
   // 種類ごとの、送る・受け取る件数（選んだ動画の合計）
-  const st={};let rmDB=0,rmLoc=0;
-  sy.sel.forEach(v=>{const d=sy.docs[v]||null,r=mergeV(v,syLoc(v,!!(d&&sy.map[v])),d,ALLT,DEL[v]);rmDB+=r.rmDB;rmLoc+=r.rmLoc;
+  const st={};let rmDB=0,rmLoc=0,jn=0;
+  sy.sel.forEach(v=>{const d=sy.docs[v]||null,fl=!!(d&&sy.map[v]),r=mergeV(v,syLoc(v,fl),d,ALLT,DEL[v]);rmDB+=r.rmDB;rmLoc+=r.rmLoc;
+    jn+=mergeV(v,syLoc(v,fl),d,{has:t=>!sy.off.has(t)},DEL[v]).joined;  // つなげるメモは、選んだ種類だけ数える
+   
     Object.keys(r.st).forEach(t=>{const a=st[t]=st[t]||{send:0,recv:0};a.send+=r.st[t].send;a.recv+=r.st[t].recv});
     L.forEach(e=>{if(e.v===v)st[e.type]=st[e.type]||{send:0,recv:0}});((d&&d.records)||[]).forEach(x=>{if(x.type)st[x.type]=st[x.type]||{send:0,recv:0}})});
   const types=Object.keys(st).sort((a,b)=>((TORD.indexOf(a)+1)||99)-((TORD.indexOf(b)+1)||99));
   $('stypes').innerHTML=types.length?'<div class="mt" style="font-size:14px;margin-top:8px">同期する記録の種類</div>'+types.map((t,k)=>{const a=st[t];
     return`<label><input type="checkbox" data-k="${k}" ${sy.off.has(t)?'':'checked'}>${esc(TLABEL(t))}<span class="note">（${a.send||a.recv?'送る '+a.send+'件・受け取る '+a.recv+'件':'変わりなし'}）</span></label>`}).join(''):'';
   $('stypes').querySelectorAll('input').forEach(inp=>inp.onchange=()=>{const t=types[+inp.dataset.k];inp.checked?sy.off.delete(t):sy.off.add(t);drawSync()});
-  $('sdel').textContent=rmDB||rmLoc?'消した記録：'+[rmDB?'データベースから '+rmDB+'件':'',rmLoc?'この端末から '+rmLoc+'件（ほかの人が消したもの）':''].filter(Boolean).join('、')+'を消します':''}
+  $('sdel').textContent=[rmDB||rmLoc?'消した記録：'+[rmDB?'データベースから '+rmDB+'件':'',rmLoc?'この端末から '+rmLoc+'件（ほかの人が消したもの）':''].filter(Boolean).join('、')+'を消します':'',
+    jn?'メモ：この端末とデータベースの両方で書き換えられていた '+jn+'件は「データベースのメモ / この端末のメモ」とつなげます':''].filter(Boolean).join('。')}
 /* 1本の動画を同期する。データベースに無く、チーム名が初期のままなら 'blocked' */
 async function syncOne(f,db,v,S,sw){const ref=f.doc(db,'groups',grp(),'videos',v);let out=null;
   await f.runTransaction(db,async tx=>{out=null;
@@ -1305,14 +1325,14 @@ async function syncOne(f,db,v,S,sw){const ref=f.doc(db,'groups',grp(),'videos',v
   if(r.del.length)DEL[v]=r.del;
   const e0=r.loc[0];if(e0){addOrder(v,e0.pi);if(e0.title&&!TT[v])TT[v]=e0.title}
   let send=0,recv=0;Object.keys(r.st).forEach(t=>{send+=r.st[t].send;recv+=r.st[t].recv});
-  return{send,recv,rm:r.rmLoc}}
+  return{send,recv,rm:r.rmLoc,jn:r.joined}}
 async function runSync(){if(!sy||sy.st!=='ready'||!sy.sel.size)return;
   const vs=sy.vids.filter(v=>sy.sel.has(v)),S={has:t=>!sy.off.has(t)},map={...sy.map};
   sy.st='run';sy.err='';drawSync();
-  let send=0,recv=0,rm=0,done=0,ng=0,err='';
+  let send=0,recv=0,rm=0,jn=0,done=0,ng=0,err='';
   try{const{f,db}=await within(fb(),20000);
     for(const v of vs){const x=await within(syncOne(f,db,v,S,!!map[v]),30000);
-      if(x==='blocked'){ng++;continue}done++;send+=x.send;recv+=x.recv;rm+=x.rm}}
+      if(x==='blocked'){ng++;continue}done++;send+=x.send;recv+=x.recv;rm+=x.rm;jn+=x.jn}}
   catch(e){err=fbErr(e)}
   sortL();shownV='';draw();syncNames();save();
   if(err&&!done){sy.st='ready';sy.err=err;drawSync();return}
@@ -1320,7 +1340,7 @@ async function runSync(){if(!sy||sy.st!=='ready'||!sy.sel.size)return;
   const vv=viewV(),other=new Set(L.filter(e=>e.v!==vv&&vs.includes(e.v)).map(e=>e.v)).size;
   toast('同期しました（送る '+send+'件・受け取る '+recv+'件）');
   msg([err?'途中で止まりました：'+err+'（'+done+'本は同期済み）':'',ng?ng+'本はチーム名が初期のままなので送りませんでした':'',
-    rm?'ほかの人が消した記録 '+rm+'件を消しました':'',!err&&recv&&other?'ほかの動画の記録は、その動画を開くと表に出ます':''].filter(Boolean).join('。'))}
+    rm?'ほかの人が消した記録 '+rm+'件を消しました':'',jn?'両方で書き換えられていたメモ '+jn+'件をつなげました':'',!err&&recv&&other?'ほかの動画の記録は、その動画を開くと表に出ます':''].filter(Boolean).join('。'))}
 
 /* ---------- 自動保存 ----------
    記録・チーム名はブラウザに保存し、どのタブで開いても使えるようにする（vt_data）。
