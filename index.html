@@ -287,7 +287,7 @@ td textarea{display:block;width:100%;min-width:4em;padding:4px 6px;font-size:14p
 <li>同期する動画と記録の種類を選んで「同期する」。データベースの記録を取り込み、この端末の記録を送る</li>
 <li>ほかの人が記録した同じ場面（6秒以内の同じチームのサーブなど）は1つにまとめる</li>
 <li>チーム名が「Aチーム」「Bチーム」のままの動画は、データベースにまだ無ければ送れない</li>
-<li>メモを書き換えると、同期でほかの人にも伝わる。前回の同期のあとに、自分とほかの人の両方が同じ記録のメモを書き換えていたときは「データベースのメモ / 自分のメモ」とつなげて残す</li>
+<li>メモを書き換えると、同期でほかの人にも伝わる。前回の同期（記録ファイルから読み込んだ記録は読み込み）のあとに、自分とほかの人の両方が同じ記録のメモを書き換えていたときは「データベースのメモ / 自分のメモ」とつなげて残す</li>
 <li>記録を消すと、同期したときにデータベースとほかの人の端末からも消える</li>
 </ul>
 <h4>記録ファイル（CSV）</h4>
@@ -1080,6 +1080,8 @@ function memoFills(){return imp.recs.filter(e=>{const m=e.memo.trim();return imp
 function closeImp(){imp=null;$('mimp').classList.remove('on')}
 function doImp(){if(!imp)return;const fileV=[...new Set(imp.recs.map(e=>e.v))];
   const add=imp.recs.filter(e=>imp.on.has(e.type)&&!e.dup),fills=memoFills(),d=inNames();
+  // 同じ記録（固有番号が同じ）で、まだ一度も同期していない記録は、読み込んだメモを「前回のメモ」にする（同期のメモの合わせ方で使う）
+  imp.recs.forEach(e=>{if(imp.on.has(e.type)&&e.dup&&e.uid&&e.dup.uid===e.uid&&e.dup.bm===undefined)e.dup.bm=e.memo});
   fills.forEach(e=>{const a=e.dup.memo.trim(),b=e.memo.trim();e.dup.memo=a?a+' / '+b:b;e.dup.u=Date.now()});
   // 同じサーブにファイル側だけノーカウントの印があれば、印を写す
   imp.recs.forEach(e=>{if(imp.on.has(e.type)&&e.dup&&e.nc&&!e.dup.nc){e.dup.nc=true;e.dup.u=Date.now()}});
@@ -1089,7 +1091,7 @@ function doImp(){if(!imp)return;const fileV=[...new Set(imp.recs.map(e=>e.v))];
   add.forEach(e=>{if(!TN[e.v]){const o=imp.nm[e.v]||{};TN[e.v]={a:o.a||d.a,b:o.b||d.b}}
     addOrder(e.v,e.pi);if(e.title&&!TT[e.v])TT[e.v]=e.title;
     // 消した記録をファイルから戻すときは、新しい記録として扱う（同期で消した印に負けないように）
-    L.push({t:e.t,type:e.type,side:e.side,memo:e.memo,nc:e.nc||undefined,...(e.type===PT?{sa:e.sa,sb:e.sb,sn:e.sn}:{}),n:++seq,uid:e.uid&&!isDel(e.v,e.uid)?e.uid:newUid(),u:0,v:e.v,pi:e.pi,list:e.list,title:e.title})});
+    L.push({t:e.t,type:e.type,side:e.side,memo:e.memo,nc:e.nc||undefined,...(e.type===PT?{sa:e.sa,sb:e.sb,sn:e.sn}:{}),n:++seq,uid:e.uid&&!isDel(e.v,e.uid)?e.uid:newUid(),u:0,bm:e.memo,v:e.v,pi:e.pi,list:e.list,title:e.title})});
   closeImp();sortL();shownV='';draw();
   syncNames();toast(add.length+'件追加しました'+(fills.length?'（メモ '+fills.length+'件）':''));
   const vv=viewV(),other=add.filter(e=>e.v!==vv),ov=new Set(other.map(e=>e.v)).size;
@@ -1169,15 +1171,15 @@ function canon(x){return Array.isArray(x)?'['+x.map(canon).join()+']':x&&typeof 
 /* 1本の動画のマージ。loc: この端末の記録（データベースのA・Bの向きにそろえた写し）、d: データベースのドキュメント（なければ null）、
    S: 同期する種類（S.has(種類)）、myDel: この端末で消した記録の record_id。
    戻り値 loc: この端末の新しい記録、recs: データベースの新しい記録、del: 消した記録、st[種類]={send,recv}: 送る・受け取る件数 */
-/* 同じ記録のメモの合わせ方。a: この端末のメモ、b: データベースのメモ、base: 前回の同期でデータベースとそろえたときのメモ（bm）。
+/* 同じ記録のメモの合わせ方。a: この端末のメモ、b: データベースのメモ、base: 前回のメモ（bm）。
+   前回のメモは、前回の同期でデータベースとそろえたときのメモ。記録ファイルから読み込んだ記録は、読み込んだときのメモ。
    - データベースが前回から変わっていなければ、この端末のメモ（書き換えていればそれ）
    - この端末が前回から変わっていなければ、データベースのメモ
    - 両方変わっていたら（誰かが同期のあいだに書き換えていた）「データベースのメモ / この端末のメモ」とつなげる。
-     片方がもう片方を含むとき（書き足しただけなど）は長い方。前回のメモがわからない記録（この仕組みより前に同期したもの）もこちら */
+     片方が空にしていたら空でない方。前回のメモがわからない記録もつなげる（消さないため） */
 function mergeMemo(a,b,base){a=a||'';b=b||'';if(a===b)return a;
   if(base!==undefined&&base!==null){if(b===base)return a;if(a===base)return b}
-  const x=a.trim(),y=b.trim();if(!x)return b;if(!y)return a;
-  if(x.includes(y))return a;if(y.includes(x))return b;
+  const x=a.trim(),y=b.trim();if(!x)return b;if(!y)return a;  // 片方が空にしていたら、空でない方
   return y+' / '+x}
 function mergeV(v,loc,d,S,myDel){
   const del=new Set([...(myDel||[]),...((d&&d.deleted)||[])]),st={},cnt=(t,k)=>{(st[t]=st[t]||{send:0,recv:0})[k]++};
