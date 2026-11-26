@@ -13,10 +13,16 @@ service cloud.firestore {
       function named(s) {
         return s is string && s.size() > 0 && s.size() <= 100 && s != 'Aチーム' && s != 'Bチーム';
       }
+      // 動画に自分で付けたタイトル（無くてもよい）。updated_at は付けた時刻（ミリ秒）
+      function okTitle(t) {
+        return t is map && t.keys().hasOnly(['name', 'updated_at'])
+          && t.name is string && t.name.size() <= 200 && t.updated_at is number;
+      }
       function okDoc() {
         let d = request.resource.data;
         return d.keys().hasOnly(['video_id', 'video_title', 'playlist_id', 'playlist_index',
-                                 'team_a', 'team_b', 'records', 'deleted', 'updated_at'])
+                                 'team_a', 'team_b', 'records', 'deleted', 'updated_at', 'custom_title'])
+          && (!('custom_title' in d) || okTitle(d.custom_title))
           && d.video_id == videoId
           && named(d.team_a) && named(d.team_b)
           && d.records is list && d.records.size() <= 5000
