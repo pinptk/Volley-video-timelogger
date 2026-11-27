@@ -299,6 +299,7 @@ td textarea{display:block;width:100%;min-width:4em;padding:4px 6px;font-size:14p
 <li>メモを書き換えると、同期でほかの人にも伝わる。前回の同期（記録ファイルから読み込んだ記録は読み込み）のあとに、自分とほかの人の両方が同じ記録のメモを書き換えていたときは「データベースのメモ / 自分のメモ」とつなげて残す</li>
 <li>記録を消すと、同期したときにデータベースとほかの人の端末からも消える</li>
 <li>動画一覧で付けたタイトルも同期する。データベースとこの端末で違うときは、あとで付けた方を使う</li>
+<li>見た動画の一覧に無い動画を開いたとき、データベースにあれば、その動画だけ自動で同期する（自分で付けたチーム名がデータベースのと違うときはしない）</li>
 </ul>
 <h4>記録ファイル（CSV）</h4>
 <ul>
@@ -520,7 +521,7 @@ function showNow(){if(!ready||cleared)return;let t='';
     if(d.video_id&&d.title&&TT[d.video_id]!==d.title){TT[d.video_id]=d.title;selLater()}
     if(cur.list&&pl&&pl.length)t=(P.getPlaylistIndex()+1)+' / '+pl.length+' 本目　';t+=d.title||''}catch(e){}
   $('now').textContent=t;plSync();syncNames();
-  try{const d=P.getVideoData();if(d.video_id)addHist(d.video_id,cur.list,d.title||'')}catch(e){}}
+  try{const d=P.getVideoData();if(d.video_id&&addHist(d.video_id,cur.list,d.title||''))autoSync(d.video_id)}catch(e){}}
 
 /* ---------- 今まで見た動画 ----------
    開いた動画を新しい順に100本まで覚えておく（vt_hist）。タブをまたいで使うので毎回保存先から読む */
@@ -529,11 +530,13 @@ function getHist(){let h=null;try{h=JSON.parse(localStorage.getItem(HKEY)||'null
   if(!Array.isArray(h)){  // 初めてのときは、記録のある動画から作る
     h=[];[...new Set(L.map(e=>e.v))].forEach(v=>{const e=L.find(x=>x.v===v);h.push({v,list:e.list||'',title:TT[v]||e.title||'',at:0})})}
   return h}
+/* 戻り値: 一覧に無かった動画なら true */
 function addHist(v,list,title){const h=getHist(),k=h.findIndex(x=>x.v===v);
-  if(k===0&&h[0].list===list&&(!title||h[0].title===title))return;
+  if(k===0&&h[0].list===list&&(!title||h[0].title===title))return false;
   const old=k>=0?h.splice(k,1)[0]:null;
   h.unshift({v,list:list||(old&&old.list)||'',title:title||(old&&old.title)||TT[v]||'',at:Date.now()});
-  try{localStorage.setItem(HKEY,JSON.stringify(h.slice(0,100)))}catch(e){}}
+  try{localStorage.setItem(HKEY,JSON.stringify(h.slice(0,100)))}catch(e){}
+  return k<0}
 /* ---------- 動画一覧 ----------
    データベースを設定していれば「見た動画」「データベースにある動画」のボタンを出し、押した方の一覧を出す。
    設定していなければ、見た動画の一覧をそのまま出す */
@@ -1375,25 +1378,47 @@ async function syncOne(f,db,v,S,sw,noCT){const ref=f.doc(db,'groups',grp(),'vide
   const e0=r.loc[0];if(e0){addOrder(v,e0.pi);if(e0.title&&!TT[v])TT[v]=e0.title}
   let send=0,recv=0;Object.keys(r.st).forEach(t=>{send+=r.st[t].send;recv+=r.st[t].recv});
   return{send,recv,rm:r.rmLoc,jn:r.joined}}
+/* syncOne に、ルールが古くてタイトル（custom_title）を断られたときのやり直しを付けたもの。ctNG: タイトルを送れなかった */
+async function syncV(f,db,v,S,sw){
+  try{return{x:await within(syncOne(f,db,v,S,sw),30000),ctNG:false}}
+  catch(e){if(!String(e&&e.code||'').includes('permission-denied')||!ctWants(v))throw e;
+    return{x:await within(syncOne(f,db,v,S,sw,true),30000),ctNG:true}}}
+const CTNG='タイトルを送れませんでした（データベースのルールが古いため。データベースを用意した人に、「設定」→「データベースの用意のしかた」のルールを貼り直してもらってください）';
+function afterSync(){sortL();shownV='';draw();syncNames();save()}
+/* 見た動画の一覧に無い動画を開いたとき、データベースにあれば、その動画だけ自動で同期する（すべての種類）。
+   この端末で付けたチーム名がデータベースのと違うときは「チーム名の対応」を選んでもらう必要があるので、自動ではしない */
+let autoP=null;const autoTried=new Set();
+function autoSync(v){if(!hasCfg()||!grp()||!/^[A-Za-z0-9_-]{11}$/.test(v)||autoTried.has(v))return;autoTried.add(v);
+  const prev=autoP;
+  autoP=(async()=>{await prev;if(sy&&sy.st==='run')return;
+    try{const{f,db}=await within(fb(),20000);
+      const s=await within(f.getDoc(f.doc(db,'groups',grp(),'videos',v)),20000);if(!s.exists())return;
+      const d=s.data(),n=TN[v],o={a:d.team_a,b:d.team_b};
+      const sw=!!(n&&!unnamed(n)&&n.a===o.b&&n.b===o.a);
+      if(n&&!unnamed(n)&&!sw&&!(n.a===o.a&&n.b===o.b)){
+        msg('この動画はデータベースにありますが、チーム名がデータベース（'+o.a+' vs '+o.b+'）と違うので自動では取り込みませんでした。「データベースと同期」で取り込んでください');return}
+      const{x,ctNG}=await syncV(f,db,v,ALLT,sw);if(x==='blocked')return;
+      afterSync();
+      toast(x.recv?'データベースから記録を取り込みました（'+x.recv+'件）':'データベースと同期しました');
+      msg([ctNG?CTNG:'',x.rm?'ほかの人が消した記録 '+x.rm+'件を消しました':''].filter(Boolean).join('。'))}
+    catch(e){msg('データベースとの自動の同期ができませんでした：'+fbErr(e))}})();
+}
 async function runSync(){if(!sy||sy.st!=='ready'||!sy.sel.size)return;
   const vs=sy.vids.filter(v=>sy.sel.has(v)),S={has:t=>!sy.off.has(t)},map={...sy.map};
   sy.st='run';sy.err='';drawSync();
+  await autoP;  // 自動の同期の途中なら、終わるのを待つ
   let send=0,recv=0,rm=0,jn=0,done=0,ng=0,ctNG=0,err='';
   try{const{f,db}=await within(fb(),20000);
-    for(const v of vs){let x;
-      try{x=await within(syncOne(f,db,v,S,!!map[v]),30000)}
-      catch(e){  // ルールが古くてタイトル（custom_title）を断られたときは、タイトルを外して記録だけ同期する
-        if(!String(e&&e.code||'').includes('permission-denied')||!ctWants(v))throw e;
-        x=await within(syncOne(f,db,v,S,!!map[v],true),30000);ctNG++}
+    for(const v of vs){const{x,ctNG:c}=await syncV(f,db,v,S,!!map[v]);if(c)ctNG++;
       if(x==='blocked'){ng++;continue}done++;send+=x.send;recv+=x.recv;rm+=x.rm;jn+=x.jn}}
   catch(e){err=fbErr(e)}
-  sortL();shownV='';draw();syncNames();save();
+  afterSync();
   if(err&&!done){sy.st='ready';sy.err=err;drawSync();return}
   sy.st='';closeSync();
   const vv=viewV(),other=new Set(L.filter(e=>e.v!==vv&&vs.includes(e.v)).map(e=>e.v)).size;
   toast('同期しました（送る '+send+'件・受け取る '+recv+'件）');
   msg([err?'途中で止まりました：'+err+'（'+done+'本は同期済み）':'',ng?ng+'本はチーム名が初期のままなので送りませんでした':'',
-    ctNG?ctNG+'本はタイトルを送れませんでした（データベースのルールが古いため。データベースを用意した人に、「設定」→「データベースの用意のしかた」のルールを貼り直してもらってください）':'',
+    ctNG?ctNG+'本は'+CTNG:'',
     rm?'ほかの人が消した記録 '+rm+'件を消しました':'',jn?'両方で書き換えられていたメモ '+jn+'件をつなげました':'',!err&&recv&&other?'ほかの動画の記録は、その動画を開くと表に出ます':''].filter(Boolean).join('。'))}
 
 /* ---------- 自動保存 ----------
