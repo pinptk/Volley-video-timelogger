@@ -568,7 +568,7 @@ function drawListDB(keep){const plt=getPLT(),sc=$('hlist').scrollTop;
   if(!hdb||hdb.st!=='ready'){$('hnote').textContent=hdb&&hdb.st==='err'?hdb.err:'データベースを読み込み中…';$('hlist').innerHTML='';return}
   const ms=x=>x&&x.toMillis?x.toMillis():+x||0,docs=hdb.docs;
   const vs=Object.keys(docs).sort((a,b)=>ms(docs[b].updated_at)-ms(docs[a].updated_at));
-  $('hnote').textContent='合言葉「'+grp()+'」でデータベースにある動画（新しく同期された順）。開いたあと「データベースと同期」で記録を取り込めます。';
+  $('hnote').textContent='合言葉「'+grp()+'」でデータベースにある動画（新しく同期された順）。見た動画に無い動画は、開くと自動で記録を取り込みます。';
   $('hlist').innerHTML=vs.length?vs.map((v,i)=>{const d=docs[v],nd=(d.records||[]).filter(r=>!isMark(r.type)).length,nl=L.filter(e=>e.v===v&&!isMark(e.type)).length;
     const sub=[fmtAt(ms(d.updated_at)),(d.team_a||'')+' vs '+(d.team_b||''),'データベース '+nd+'件',nl?'この端末 '+nl+'件':'この端末にはまだありません'].filter(Boolean).join('・');
     const pl=d.playlist_id?'再生リスト：'+(plt[d.playlist_id]||'（名前を取得できていません）'):'';
